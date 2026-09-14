@@ -38,6 +38,21 @@ carry boxes from more than one original folder.
 train 1038 · valid 314 · test 142
 ```
 
+## Recipes
+
+`data/iba_cocktails.json` holds all **102 official IBA cocktails** (34 Unforgettables, 34
+Contemporary Classics, 34 New Era Drinks) with exact measurements, method and garnish, scraped
+from iba-world.com by `scripts/fetch_iba.py` rather than written from memory.
+
+Getting from a detected bottle to a recipe takes two mappings:
+
+- `data/bottles.yaml` — each of the 50 detector classes to what it pours (`gordons` → `gin`).
+- `data/ingredient_rules.yaml` — the 225 different ways the IBA writes an ingredient
+  ("Fresh Lime Juice", "Freshly Squeezed Lime juice", "Fresh lime") down to one canonical key,
+  split into `bar` items that must be on the shelf and `pantry` items assumed present.
+  `equivalents` are freely interchangeable (Cointreau for triple sec); `substitutes` are only
+  accepted under `--loose` (aged rum where the IBA asks for white).
+
 ## Usage
 
 ```bash
@@ -48,16 +63,32 @@ python scripts/build_dataset.py
 # 2. train
 python scripts/train.py                              # yolo11s, 200 epochs
 python scripts/train.py --model yolo11m.pt --epochs 300
+
+# 3. recommend
+python scripts/recommend.py --image shelf.jpg --weights runs/yolo11s/weights/best.pt
+python scripts/recommend.py --bottles gordons,extradry,maraschino,orangebitters
+python scripts/recommend.py --bottles ... --loose --missing 1
+python scripts/recommend.py --check        # audit the rules against the recipe data
 ```
 
 `dataset/manifest.csv` records, for every merged photo, which source folders it came from and
 which classes it ended up with.
 
+### What the 50 bottles actually reach
+
+All 50 classes together supply 28 distinct ingredients, which covers **23 of the 77** bar
+ingredients the IBA list calls for — enough for **29 cocktails** exactly as specified, or 49
+with `--loose`. The single biggest gap is that the shelf has aged, dark, spiced and coconut rum
+but **no white rum**, which alone blocks the Daiquiri, Mojito, Cuba Libre and Piña Colada.
+Campari (Negroni, Americano, Boulevardier, Cardinale) and Angostura bitters (Manhattan, Old
+Fashioned) are the next two.
+
 ## Layout
 
 ```
 finalloopy/   50 per-class Roboflow exports (source of truth, tracked)
-scripts/      build_dataset.py, train.py
+data/         IBA recipes + bottle and ingredient mappings
+scripts/      build_dataset.py, train.py, fetch_iba.py, recommend.py
 dataset/      merged YOLO dataset — generated, gitignored
 runs/         training output — gitignored
 weights/      pretrained checkpoints — gitignored

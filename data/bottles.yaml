@@ -1,0 +1,57 @@
+# The 50 detector classes, mapped to what they actually pour.
+#
+# `class` is the label the model predicts (the source folder name in finalloopy/).
+# `ingredient` is the canonical key used by data/ingredient_rules.yaml, so a detected
+# Gordon's on the shelf satisfies any recipe calling for gin.
+
+bottles:
+  bombay:                   {label: "Bombay Sapphire",            ingredient: gin}
+  buffalotrace:             {label: "Buffalo Trace",              ingredient: bourbon}
+  bushmillsblackbush:       {label: "Bushmills Black Bush",       ingredient: irish_whiskey}
+  bushmillsoriginal:        {label: "Bushmills Original",         ingredient: irish_whiskey}
+  camusvsop:                {label: "Camus VSOP",                 ingredient: cognac}
+  camusxo:                  {label: "Camus XO",                   ingredient: cognac}
+  captainmorganspicedgold:  {label: "Captain Morgan Spiced Gold", ingredient: spiced_rum}
+  cassis:                   {label: "Crème de Cassis",            ingredient: creme_de_cassis}
+  cinzanorosso:             {label: "Cinzano Rosso",              ingredient: sweet_vermouth}
+  cointreau:                {label: "Cointreau",                  ingredient: cointreau}
+  diplomatico:              {label: "Diplomático",                ingredient: aged_rum}
+  disaronno:                {label: "Disaronno",                  ingredient: amaretto}
+  drambuie:                 {label: "Drambuie",                   ingredient: drambuie}
+  evanwilliams:             {label: "Evan Williams",              ingredient: bourbon}
+  extradry:                 {label: "Martini Extra Dry",          ingredient: dry_vermouth}
+  famousgrouse:             {label: "The Famous Grouse",          ingredient: scotch}
+  gilbeysvodka:             {label: "Gilbey's Vodka",             ingredient: vodka}
+  gordons:                  {label: "Gordon's",                   ingredient: gin}
+  grandmanier:              {label: "Grand Marnier",              ingredient: grand_marnier}
+  hendricks:                {label: "Hendrick's",                 ingredient: gin}
+  hennessyvsop:             {label: "Hennessy VSOP",              ingredient: cognac}
+  hennessyxo:               {label: "Hennessy XO",                ingredient: cognac}
+  jagermeister:             {label: "Jägermeister",               ingredient: jagermeister}
+  jameson:                  {label: "Jameson",                    ingredient: irish_whiskey}
+  jimbeam:                  {label: "Jim Beam",                   ingredient: bourbon}
+  johnbarrfinest:           {label: "John Barr Finest",           ingredient: scotch}
+  johnbarrreserve:          {label: "John Barr Reserve",          ingredient: scotch}
+  johnnieblack:             {label: "Johnnie Walker Black",       ingredient: scotch}
+  johnniered:               {label: "Johnnie Walker Red",         ingredient: scotch}
+  josecuervoespecial:       {label: "Jose Cuervo Especial Gold",  ingredient: tequila}
+  josecuervoespecialsilver: {label: "Jose Cuervo Especial Silver", ingredient: tequila}
+  kahlua:                   {label: "Kahlúa",                     ingredient: coffee_liqueur}
+  limoncello:               {label: "Limoncello",                 ingredient: limoncello}
+  makersmark:               {label: "Maker's Mark",               ingredient: bourbon}
+  malibu:                   {label: "Malibu",                     ingredient: coconut_rum}
+  maraschino:               {label: "Maraschino Luxardo",         ingredient: maraschino}
+  martinirosso:             {label: "Martini Rosso",              ingredient: sweet_vermouth}
+  midori:                   {label: "Midori",                     ingredient: melon_liqueur}
+  nakedgrouse:              {label: "Naked Grouse",               ingredient: scotch}
+  orangebitters:            {label: "Orange Bitters",             ingredient: orange_bitters}
+  peachtree:                {label: "DeKuyper Peachtree",         ingredient: peach_schnapps}
+  peychaudsbitters:         {label: "Peychaud's Bitters",         ingredient: peychauds_bitters}
+  plantationoriginaldark:   {label: "Plantation Original Dark",   ingredient: dark_rum}
+  remymartinvsop:           {label: "Rémy Martin VSOP",           ingredient: cognac}
+  skyy:                     {label: "Skyy",                       ingredient: vodka}
+  smirnoff:                 {label: "Smirnoff",                   ingredient: vodka}
+  tanquerayten:             {label: "Tanqueray No. Ten",          ingredient: gin}
+  triplesec:                {label: "Triple Sec",                 ingredient: triple_sec}
+  wildturkeykrye:           {label: "Wild Turkey Rye",            ingredient: rye}
+  wyborowa:                 {label: "Wyborowa",                   ingredient: vodka}

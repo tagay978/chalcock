@@ -1,0 +1,243 @@
+# How IBA ingredient text is reduced to canonical ingredient keys.
+#
+# The IBA writes an ingredient 225 different ways across 102 recipes ("Fresh Lime Juice",
+# "Freshly Squeezed Lime juice", "Fresh lime"), so every line is matched against the ordered
+# patterns below and reduced to one key. Order matters: the first match wins, so specific
+# patterns ("old tom gin") must precede general ones ("gin").
+#
+# tier `bar`    -> must be on the shelf, i.e. detected by the model or passed with --assume
+# tier `pantry` -> juices, syrups, sodas, eggs, herbs; assumed to be available
+
+patterns:
+  # --- bitters (bar bottles, not pantry) ---
+  - {match: "peychaud", key: peychauds_bitters}
+  - {match: "orange bitters", key: orange_bitters}
+  - {match: "angostura|aromatic bitters", key: angostura_bitters}
+
+  # --- vermouth, fortified and sparkling wine ---
+  - {match: "cinzano rosso|sweet red vermouth|sweet vermouth|vermouth rosso", key: sweet_vermouth}
+  - {match: "dry vermouth|white vermouth", key: dry_vermouth}
+  - {match: "lillet", key: lillet_blanc}
+  - {match: "amontillado", key: sherry_amontillado}
+  - {match: "palo cortado", key: sherry_palo_cortado}
+  - {match: "port wine|tawny port", key: port}
+  - {match: "red wine|shiraz|malbech|malbec", key: red_wine}
+  - {match: "dry white wine", key: white_wine}
+  - {match: "prosecco", key: prosecco}
+  - {match: "champagne", key: champagne}
+  - {match: "sparkling wine", key: sparkling_wine}
+
+  # --- gin ---
+  - {match: "old tom gin", key: old_tom_gin}
+  - {match: "gin", key: gin}
+
+  # --- vodka ---
+  - {match: "vanilla vodka|vodka vanilla", key: vanilla_vodka}
+  - {match: "vodka citron", key: citron_vodka}
+  - {match: "vodka", key: vodka}
+
+  # --- rum (the IBA is very specific here, so keep the styles apart) ---
+  - {match: "goslings", key: goslings_rum}
+  - {match: "blackstrap", key: blackstrap_rum}
+  - {match: "overproof", key: overproof_rum}
+  - {match: "agricole|martinique", key: rhum_agricole}
+  - {match: "demerara rum", key: demerara_rum}
+  - {match: "jamaican rum|jamaica rum|jamaican dark rum", key: jamaican_rum}
+  - {match: "gold puerto rican rum", key: gold_rum}
+  - {match: "coconut", key: coconut_rum}
+  - {match: "white cuban ron|cuban rum|white rum", key: white_rum}
+  - {match: "aged rum|ron profundo|ron smoky|havana club", key: aged_rum}
+  - {match: "spiced rum", key: spiced_rum}
+  - {match: "dark rum", key: dark_rum}
+  - {match: "rum|ron", key: rum}
+
+  # --- agave and other base spirits ---
+  - {match: "mezcal|espadin", key: mezcal}
+  - {match: "tequila|agave", key: tequila}
+  - {match: "cacha[cç]a", key: cachaca}
+  - {match: "pisco", key: pisco}
+  - {match: "aguardiente", key: aguardiente}
+  - {match: "grappa", key: grappa}
+
+  # --- whisk(e)y ---
+  - {match: "bourbon or rye|rye whiskey or bourbon", key: bourbon_or_rye}
+  - {match: "rye whiskey|rye whisky", key: rye}
+  - {match: "bourbon", key: bourbon}
+  - {match: "irish whiskey", key: irish_whiskey}
+  - {match: "lagavulin|islay", key: islay_scotch}
+  - {match: "scotch|blended scotch whisky", key: scotch}
+
+  # --- brandy family (before the bare 'brandy' catch-all) ---
+  - {match: "apricot brandy", key: apricot_brandy}
+  - {match: "peach brandy", key: peach_brandy}
+  - {match: "cherry brandy|sangue morlacco", key: cherry_brandy}
+  - {match: "calvados", key: calvados}
+  - {match: "cognac", key: cognac}
+  - {match: "brandy", key: brandy}
+
+  # --- liqueurs ---
+  - {match: "maraschino", key: maraschino}
+  - {match: "cointreau", key: cointreau}
+  - {match: "triple sec", key: triple_sec}
+  - {match: "curacao|curaçao", key: curacao}
+  - {match: "grand marnier", key: grand_marnier}
+  - {match: "green chartreuse", key: chartreuse_green}
+  - {match: "yellow chartreuse", key: chartreuse_yellow}
+  - {match: "chartreuse", key: chartreuse_green}
+  - {match: "b[eé]n[eé]dictine", key: benedictine}
+  - {match: "drambuie", key: drambuie}
+  - {match: "kahl[uú]a|coffee liqueur", key: coffee_liqueur}
+  - {match: "amaretto", key: amaretto}
+  - {match: "frangelico", key: frangelico}
+  - {match: "cr[eè]me de cacao \\(brown\\)|brown cr[eè]me de cacao", key: creme_de_cacao_brown}
+  - {match: "cr[eè]me de cacao", key: creme_de_cacao_white}
+  - {match: "cr[eè]me de menthe \\(green\\)|green cr[eè]me de menthe", key: creme_de_menthe_green}
+  - {match: "cr[eè]me de menthe", key: creme_de_menthe_white}
+  - {match: "cr[eè]me de violette", key: creme_de_violette}
+  - {match: "cr[eè]me de m[uû]re", key: creme_de_mure}
+  - {match: "cr[eè]me de cassis", key: creme_de_cassis}
+  - {match: "raspberry liqueur", key: raspberry_liqueur}
+  - {match: "passion fruit liqueur", key: passion_fruit_liqueur}
+  - {match: "peach schnapps", key: peach_schnapps}
+  - {match: "limoncello", key: limoncello}
+  - {match: "melon liqueur|midori", key: melon_liqueur}
+  - {match: "campari", key: campari}
+  - {match: "aperol", key: aperol}
+  - {match: "amaro", key: amaro}
+  - {match: "cynar", key: cynar}
+  - {match: "fernet", key: fernet}
+  - {match: "falernum", key: falernum}
+  - {match: "allspice", key: allspice_dram}
+  - {match: "absinthe", key: absinthe}
+  - {match: "pernod", key: pernod}
+  - {match: "j[aä]germeister", key: jagermeister}
+
+  # --- pantry: cordials and non-alcoholic mixers ---
+  - {match: "elderflower cordial", key: elderflower_cordial}
+  - {match: "chamomile cordial", key: chamomile_cordial}
+  - {match: "lime", key: lime_juice}
+  - {match: "lemon", key: lemon_juice}
+  - {match: "orange juice|orange wheel|orange flower water", key: orange_juice}
+  - {match: "pineapple juice", key: pineapple_juice}
+  - {match: "pineapple", key: pineapple}
+  - {match: "cranberry", key: cranberry_juice}
+  - {match: "grapefruit soda|pink grapefruit", key: grapefruit_soda}
+  - {match: "grapefruit", key: grapefruit_juice}
+  - {match: "tomato juice", key: tomato_juice}
+  - {match: "sugar cane juice", key: sugar_cane_juice}
+  - {match: "passion fruit pur[eé]e", key: passion_fruit_puree}
+  - {match: "passion fruit syrup", key: passion_fruit_syrup}
+  - {match: "peach pur[eé]e|peach nectar", key: peach_puree}
+  - {match: "coconut cream|cream of coconut", key: coconut_cream}
+  - {match: "orgeat", key: orgeat}
+  - {match: "grenadine", key: grenadine}
+  - {match: "raspberry syrup", key: raspberry_syrup}
+  - {match: "demerara sugar syrup|demerara syrup", key: demerara_syrup}
+  - {match: "honey syrup|honey mix|raw honey|honey", key: honey_syrup}
+  - {match: "agave nectar", key: agave_nectar}
+  - {match: "simple syrup|sugar syrup", key: simple_syrup}
+  - {match: "vanilla sugar", key: vanilla_sugar}
+  - {match: "vanilla extract", key: vanilla_extract}
+  - {match: "sugar cube|superfine sugar|powdered sugar|cane sugar|sugar", key: sugar}
+  - {match: "soda water", key: soda_water}
+  - {match: "ginger beer", key: ginger_beer}
+  - {match: "ginger ale", key: ginger_ale}
+  - {match: "cola", key: cola}
+  - {match: "espresso|hot coffee|coffee", key: coffee}
+  - {match: "egg white", key: egg_white}
+  - {match: "egg yolk", key: egg_yolk}
+  - {match: "cream", key: cream}
+  - {match: "mint", key: mint}
+  - {match: "basil", key: basil}
+  - {match: "gengibre|ginger", key: ginger}
+  - {match: "chili|chilli", key: chili}
+  - {match: "cloves", key: cloves}
+  - {match: "salt", key: salt}
+  - {match: "pepper|tabasco|celery", key: seasoning}
+  - {match: "worcestershire", key: worcestershire}
+  - {match: "donn.s mix", key: donns_mix}
+  - {match: "water", key: water}
+
+# Everything not listed here is treated as a bar bottle that must be present.
+pantry:
+  - lime_juice
+  - lemon_juice
+  - orange_juice
+  - pineapple_juice
+  - pineapple
+  - cranberry_juice
+  - grapefruit_juice
+  - grapefruit_soda
+  - tomato_juice
+  - sugar_cane_juice
+  - passion_fruit_puree
+  - passion_fruit_syrup
+  - peach_puree
+  - coconut_cream
+  - orgeat
+  - grenadine
+  - raspberry_syrup
+  - demerara_syrup
+  - honey_syrup
+  - agave_nectar
+  - simple_syrup
+  - vanilla_sugar
+  - vanilla_extract
+  - sugar
+  - soda_water
+  - ginger_beer
+  - ginger_ale
+  - cola
+  - coffee
+  - egg_white
+  - egg_yolk
+  - cream
+  - mint
+  - basil
+  - ginger
+  - chili
+  - cloves
+  - salt
+  - seasoning
+  - worcestershire
+  - water
+  - elderflower_cordial
+  - chamomile_cordial
+  - donns_mix
+
+# Freely interchangeable: holding the right-hand bottle genuinely satisfies the recipe.
+equivalents:
+  triple_sec:     [cointreau, curacao, grand_marnier]
+  cointreau:      [triple_sec, curacao]
+  curacao:        [triple_sec, cointreau, grand_marnier]
+  brandy:         [cognac]
+  cognac:         [brandy]
+  bourbon_or_rye: [bourbon, rye]
+  scotch:         [islay_scotch]
+  whiskey:        [bourbon, rye, irish_whiskey, scotch]
+  rum:            [white_rum, aged_rum, dark_rum, gold_rum, jamaican_rum, demerara_rum, spiced_rum]
+  coffee_liqueur: [kahlua]
+
+# Accepted only with --loose: drinkable, but not what the IBA specifies.
+substitutes:
+  white_rum:      [aged_rum, gold_rum, spiced_rum, dark_rum]
+  aged_rum:       [dark_rum, gold_rum, jamaican_rum]
+  dark_rum:       [aged_rum, jamaican_rum, demerara_rum]
+  gold_rum:       [aged_rum, spiced_rum, dark_rum]
+  jamaican_rum:   [dark_rum, aged_rum]
+  demerara_rum:   [dark_rum, aged_rum]
+  blackstrap_rum: [dark_rum]
+  goslings_rum:   [dark_rum, aged_rum]
+  overproof_rum:  [white_rum, aged_rum]
+  rhum_agricole:  [aged_rum, white_rum]
+  old_tom_gin:    [gin]
+  rye:            [bourbon]
+  bourbon:        [rye]
+  vanilla_vodka:  [vodka]
+  citron_vodka:   [vodka]
+  angostura_bitters: [peychauds_bitters, orange_bitters]
+  aged_rum_any:   [aged_rum]
+  cherry_brandy:  [maraschino]
+  sparkling_wine: [prosecco, champagne]
+  champagne:      [prosecco, sparkling_wine]
+  prosecco:       [champagne, sparkling_wine]
