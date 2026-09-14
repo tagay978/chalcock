@@ -1,0 +1,13 @@
+# Merged dataset — rebuild with: python scripts/build_dataset.py
+dataset/
+
+# Training outputs and pretrained checkpoints
+runs/
+weights/
+*.pt
+*.log
+
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
