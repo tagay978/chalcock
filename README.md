@@ -83,13 +83,53 @@ but **no white rum**, which alone blocks the Daiquiri, Mojito, Cuba Libre and Pi
 Campari (Negroni, Americano, Boulevardier, Cardinale) and Angostura bitters (Manhattan, Old
 Fashioned) are the next two.
 
+## Adding more images
+
+The training set is ~20 photos per class, all from the original 2023 collection, and its
+validation split comes from the same photo sessions as its training split — which is why
+validation mAP is near-saturated and should not be read as real-world accuracy. New images need
+to come from a different distribution to mean anything.
+
+`scripts/harvest_images.py` collects candidates from sources that license reuse — Openverse
+(CC-licensed aggregator) and Wikimedia Commons — and records the attribution each licence
+requires in `harvest/attribution.csv`, which is tracked in git even though the images are not.
+Images under NoDerivatives are rejected outright (annotating is a derivative); NonCommercial is
+rejected unless `--allow-nc`.
+
+```bash
+python scripts/harvest_images.py --queries shelf --limit 50   # multi-bottle shelf scenes
+python scripts/filter_harvest.py --min-bottles 2              # drop text-match false positives
+python scripts/pseudo_label.py --weights runs/yolo11s/weights/best.pt
+```
+
+Text search matches metadata, not pixels, so roughly a third of results are magazine covers and
+landscapes; `filter_harvest.py` runs a COCO-pretrained detector and keeps only images that
+actually contain bottles. `pseudo_label.py` then writes draft boxes so annotation is correction
+rather than drawing from scratch.
+
+Two things this does **not** solve. Harvested photos are other people's bars, so most bottles in
+them are not among the 50 classes — the model will still put a label on them, and those guesses
+must be reviewed and deleted. And for brand coverage specifically, photographing the actual
+bottles is both cleaner and higher quality than anything a search returns.
+
+### Data provenance
+
+`finalloopy/` carries a CC BY 4.0 marking from its Roboflow export, but the underlying images
+were collected in 2023 from Instagram and Bing image search. A licence applied at export does
+not grant rights the collector did not have, so that marking should not be relied on for
+redistribution or publication. Anything harvested by `harvest_images.py` is licence-checked at
+download and attributed in `harvest/attribution.csv`; the original set is not. Worth resolving
+before the dataset ships with a paper.
+
 ## Layout
 
 ```
 finalloopy/   50 per-class Roboflow exports (source of truth, tracked)
 data/         IBA recipes + bottle and ingredient mappings
-scripts/      build_dataset.py, train.py, fetch_iba.py, recommend.py
+scripts/      build_dataset.py, train.py, fetch_iba.py, recommend.py,
+              harvest_images.py, filter_harvest.py, pseudo_label.py
 dataset/      merged YOLO dataset — generated, gitignored
+harvest/      harvested candidates — images gitignored, attribution.csv tracked
 runs/         training output — gitignored
 weights/      pretrained checkpoints — gitignored
 ```

@@ -1,6 +1,12 @@
 # Merged dataset — rebuild with: python scripts/build_dataset.py
 dataset/
 
+# Harvested images — refetch with: python scripts/harvest_images.py
+# attribution.csv IS tracked: it is the licence record for everything harvested.
+harvest/images/
+harvest/rejected/
+harvest/prelabelled/
+
 # Training outputs and pretrained checkpoints
 runs/
 weights/
