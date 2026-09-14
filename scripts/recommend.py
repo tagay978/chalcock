@@ -22,6 +22,7 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
+COCO_BOTTLE = 39
 
 # Leading quantity: "30 ml", "1 dash", "2 Bar Spoons", "3/4 Bar Spoon", "1-3 slices", "6/8 pcs".
 QTY = re.compile(
@@ -107,12 +108,53 @@ def detect(image: str, weights: str, conf: float):
     return found
 
 
+def detect_two_stage(image: str, weights: str, conf: float, coco_weights: str, pad: float = 0.15):
+    """Find bottles with a COCO detector, then identify each crop with the brand model.
+
+    The brand model was trained on close-ups: a bottle covers ~20% of the frame in training but
+    ~1% in a real shelf photo, so running it on the full image finds almost nothing. Cropping to
+    each bottle first puts the subject back at the scale the model was trained on.
+    """
+    from PIL import Image
+    from ultralytics import YOLO
+
+    if not os.path.exists(coco_weights):
+        sys.exit(f"COCO weights not found: {coco_weights}")
+    coco, brand = YOLO(coco_weights), YOLO(weights)
+
+    im = Image.open(image).convert("RGB")
+    width, height = im.size
+    crops = []
+    for r in coco.predict(image, conf=0.25, verbose=False):
+        for cls, xyxy in zip(r.boxes.cls.tolist(), r.boxes.xyxy.tolist()):
+            if int(cls) != COCO_BOTTLE:
+                continue
+            x1, y1, x2, y2 = xyxy
+            px, py = (x2 - x1) * pad, (y2 - y1) * pad
+            box = (max(0, int(x1 - px)), max(0, int(y1 - py)),
+                   min(width, int(x2 + px)), min(height, int(y2 + py)))
+            if box[2] - box[0] >= 20 and box[3] - box[1] >= 20:
+                crops.append(im.crop(box).resize((640, 640)))
+
+    found = Counter()
+    for i in range(0, len(crops), 32):
+        for r in brand.predict(crops[i:i + 32], conf=conf, verbose=False):
+            if len(r.boxes):
+                best = int(r.boxes.cls[r.boxes.conf.argmax()])
+                found[r.names[best]] += 1
+    print(f"  ({len(crops)} bottles found, {sum(found.values())} identified as known brands)")
+    return found
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bottles", help="comma-separated detector class names")
     ap.add_argument("--image", help="photo of the shelf; runs the detector")
     ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
     ap.add_argument("--conf", type=float, default=0.35)
+    ap.add_argument("--two-stage", action="store_true",
+                    help="crop bottles with a COCO detector first; needed for real shelf photos")
+    ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--assume", default="", help="extra ingredient keys you own, comma-separated")
     ap.add_argument("--loose", action="store_true", help="allow near substitutes (aged rum for white)")
     ap.add_argument("--missing", type=int, default=0, help="also show recipes short by N bottles")
@@ -140,7 +182,10 @@ def main():
         return
 
     if args.image:
-        found = detect(args.image, args.weights, args.conf)
+        if args.two_stage:
+            found = detect_two_stage(args.image, args.weights, args.conf, args.coco_weights)
+        else:
+            found = detect(args.image, args.weights, args.conf)
         print(f"detected in {os.path.basename(args.image)}:")
         for cls, n in found.most_common():
             print(f"  {rules.bottles.get(cls, {}).get('label', cls)}" + (f" x{n}" if n > 1 else ""))

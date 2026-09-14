@@ -83,6 +83,45 @@ but **no white rum**, which alone blocks the Daiquiri, Mojito, Cuba Libre and Pi
 Campari (Negroni, Americano, Boulevardier, Cardinale) and Angostura bitters (Manhattan, Old
 Fashioned) are the next two.
 
+## Results, and why the headline number is misleading
+
+YOLO11s, 640px, early-stopped at epoch 149 (best at 99):
+
+| split | mAP50 | mAP50-95 |
+| --- | --- | --- |
+| valid | 0.991 | 0.986 |
+| test | 0.952 | 0.940 |
+
+Both splits come from the same 2023 photo sessions as the training images, so this measures
+memorisation of those sessions, not detection of a bottle in the wild. Weakest test classes are
+`extradry` (0.533), `gordons` (0.720) and the near-identical pairs the label set contains —
+`johnbarrfinest`/`johnbarrreserve` (0.724/0.746), `camusvsop` (0.745).
+
+Run against 34 real bar photos harvested from Commons and Openverse, the same weights produce
+**2 detections at conf 0.5, and 4 at conf 0.25** — across photos containing several hundred
+bottles. The cause is scale:
+
+| | training set | real shelf photos |
+| --- | --- | --- |
+| median box area (% of image) | 20.3% | 1.24% |
+| 75th percentile | 26.8% | 2.69% |
+
+Three quarters of real-world bottles are smaller than 95% of the training bottles. The model was
+trained on close-ups and never sees a bottle at shelf scale.
+
+`recommend.py --two-stage` works around this by detecting bottles with a COCO-pretrained model
+and running the brand model on each crop, which puts the subject back at the trained scale. That
+raises attempts roughly fourfold, **but the identifications are mostly wrong**: on a photo of six
+Johnnie Walker bottles it returned two "Camus XO" (a cognac), one "Johnnie Walker Red" for a Gold
+Label, and one correct Black Label.
+
+The deeper problem is that there is no way to answer "none of these". Every crop is forced into
+one of 50 classes, and a real bar is full of bottles outside that vocabulary — the photo above
+contains Gold Label, Green Label and Explorers' Club, none of which are classes. Before the
+accuracy numbers mean anything the model needs either a background/unknown class or a rejection
+threshold calibrated on out-of-vocabulary bottles, and a hand-annotated real-world test set to
+measure against.
+
 ## Adding more images
 
 The training set is ~20 photos per class, all from the original 2023 collection, and its
