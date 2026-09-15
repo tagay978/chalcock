@@ -31,6 +31,30 @@ COCO_BOTTLE = 39
 IOU_MATCH = 0.5
 
 
+def ingredient_map():
+    """class name -> what it pours, so Johnnie Walker Red and Black both read as scotch.
+
+    Brand accuracy is the harder question, but the recommender only ever asks what is in the
+    bottle: naming a Gold Label as Black Label costs nothing downstream, while calling it a
+    cognac proposes a drink that cannot be made.
+    """
+    path = os.path.join(ROOT, "data", "bottles.yaml")
+    bottles = yaml.safe_load(open(path, encoding="utf-8"))["bottles"]
+    return {k: v["ingredient"] for k, v in bottles.items()}
+
+
+def make_key(names, level):
+    """Build id -> comparison key. At brand level that is the class; at ingredient level it is
+    what the bottle pours, with anything unmapped kept distinct under its own name."""
+    if level == "brand":
+        return lambda cid: names[cid] if cid < len(names) else f"?{cid}"
+    ing = ingredient_map()
+    def key(cid):
+        name = names[cid] if cid < len(names) else f"?{cid}"
+        return ing.get(name, name)
+    return key
+
+
 def to_xyxy(box):
     _, x, y, w, h = box
     return (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
@@ -114,7 +138,7 @@ def predict_two_stage(coco, brand, path, conf, pad=0.15):
     return out
 
 
-def evaluate(truth, predictions, abstain_id=None):
+def evaluate(truth, predictions, abstain_id=None, key=None):
     """Match predictions to annotations and count the outcomes that matter.
 
     Prediction ids are the model's, ground-truth ids are the test set's; they agree because
@@ -126,6 +150,7 @@ def evaluate(truth, predictions, abstain_id=None):
     separately - otherwise adding the class would look like an improvement purely by making the
     model quieter.
     """
+    key = key or (lambda cid: cid)
     stats = dict(known=0, localised=0, correct=0, abstained_known=0,
                  unknown=0, unknown_hit=0, abstained_unknown=0,
                  preds=0, named_preds=0)
@@ -150,10 +175,10 @@ def evaluate(truth, predictions, abstain_id=None):
             if best is not None:
                 used.add(best)
                 stats["localised"] += 1
-                if preds[best][0] == gt[0]:
-                    stats["correct"] += 1
-                elif preds[best][0] == abstain_id:
+                if preds[best][0] == abstain_id:
                     stats["abstained_known"] += 1
+                elif key(preds[best][0]) == key(gt[0]):
+                    stats["correct"] += 1
 
         for gt in unknown:
             gbox = to_xyxy(gt)
@@ -195,6 +220,8 @@ def main():
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--conf", default="0.25,0.5")
     ap.add_argument("--paths", default="direct,two-stage")
+    ap.add_argument("--level", default="ingredient", choices=["ingredient", "brand", "both"],
+                    help="score by what the bottle pours (what the recommender uses) or by brand")
     args = ap.parse_args()
 
     if not os.path.isdir(os.path.join(TESTSET, "images")):
@@ -235,6 +262,7 @@ def main():
     if abstain_id is not None:
         print(f"  model has an abstain class ('{UNKNOWN}', id {abstain_id})")
 
+    levels = ["ingredient", "brand"] if args.level == "both" else [args.level]
     for conf in [float(c) for c in args.conf.split(",")]:
         print(f"\n=== conf {conf} ===")
         for path_name in [p.strip() for p in args.paths.split(",")]:
@@ -243,7 +271,9 @@ def main():
                 image = os.path.join(TESTSET, "images", fn)
                 preds[fn] = (predict_direct(brand, image, conf) if path_name == "direct"
                              else predict_two_stage(coco, brand, image, conf))
-            report(path_name, evaluate(truth, preds, abstain_id), abstain_id is not None)
+            for level in levels:
+                stats = evaluate(truth, preds, abstain_id, make_key(names, level))
+                report(f"{path_name} [{level}]", stats, abstain_id is not None)
 
 
 if __name__ == "__main__":
