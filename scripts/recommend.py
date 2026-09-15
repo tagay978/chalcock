@@ -198,7 +198,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bottles", help="comma-separated detector class names")
     ap.add_argument("--image", help="photo of the shelf; runs the detector")
-    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
+    ap.add_argument("--weights", default=next(
+        (p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
+                     for r in ("yolo11s_v3", "yolo11s_v2", "yolo11s")) if os.path.exists(p)), ""))
     ap.add_argument("--conf", type=float, default=0.35)
     ap.add_argument("--one-stage", dest="two_stage", action="store_false",
                     help="run the detector straight at the photo; finds far less on real shelves")

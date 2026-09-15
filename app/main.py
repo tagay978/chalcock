@@ -272,9 +272,12 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
 
 def main():
     ap = argparse.ArgumentParser()
-    # The 51-class abstain model measured worse on real photos than this one; see the
-    # README. Point --weights at it deliberately if you want to compare.
-    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
+    # Newest usable run first. The 51-class abstain model is deliberately not in this list:
+    # it measured worse on real photos, for the reason the README records.
+    default = next((p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
+                                for r in ("yolo11s_v3", "yolo11s_v2", "yolo11s"))
+                    if os.path.exists(p)), "")
+    ap.add_argument("--weights", default=default)
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)

@@ -45,6 +45,24 @@ ALIAS = {
     "wildturkeykrye": "wildturkey",     # ouo_final files it under ryewhiskey/wildturkey
 }
 
+# Classes that are the same bottle under different names. Splitting one product across several
+# labels is not a harmless redundancy: the model has to divide its probability between classes it
+# cannot tell apart, and recall collapses. Bacardi Carta Oro, Oro and Gold are one rum; Carta
+# Blanca, Superior and White Rum are another; the `_nolabel` Wild Turkeys are the same bottles
+# photographed without the neck label. Confirmed by eye against the class reference crops.
+SYNONYMS = {
+    "bacardicartaoro": "bacardi_gold",
+    "bacardioro": "bacardi_gold",
+    "bacardigold": "bacardi_gold",
+    "bacardicartablanca": "bacardi_white",
+    "bacardisuperior": "bacardi_white",
+    "bacardiwhiterum": "bacardi_white",
+    "wildturkey_101proof": "wildturkey_101",
+    "wildturkey_101proof_nolabel": "wildturkey_101",
+    "wildturkey_8y_nolabel": "wildturkey_8y",
+}
+
+
 # Each spirit category maps to the ingredient key data/ingredient_rules.yaml already speaks.
 CATEGORY_INGREDIENT = {
     "bitters": "aromatic_bitters", "blendedwhiskey": "scotch", "bourbonwhiskey": "bourbon",
@@ -152,7 +170,7 @@ def scan_ouo(skipped):
                     # calvados/1 has a folder and a class both literally named "1".
                     if not name or name.isdigit():
                         name = cat
-                    boxes.append((name, *xywh))
+                    boxes.append((SYNONYMS.get(name, name), *xywh))
                 try:
                     size, ph = fingerprint(ipath)
                 except Exception:
@@ -184,7 +202,7 @@ def scan_old(skipped, ouo_names):
     unmatched = [n for n, t in rename.items() if t == n and norm(n) not in by_norm]
     if unmatched:
         print(f"  old classes with no counterpart in ouo_final: {', '.join(unmatched)}")
-    names = [rename[n] for n in names]
+    names = [SYNONYMS.get(rename[n], rename[n]) for n in names]
     records = []
     for split in ("train", "valid", "test"):
         idir = os.path.join(OLD, split, "images")

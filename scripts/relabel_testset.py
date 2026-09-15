@@ -28,10 +28,13 @@ import re
 import shutil
 from collections import Counter
 
+import sys
+
 import yaml
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
 TESTSET = os.path.join(ROOT, "testset")
 DATA_V2 = os.path.join(ROOT, "dataset_v2")
 UNKNOWN = "unknown_bottle"
@@ -45,6 +48,14 @@ ALIAS = {
     "wildturkeykrye": "wildturkey",
     "grandmanier": "grandmarnier",
 }
+
+# Classes the builder folded together because they are the same bottle. Re-running this script
+# after a merge must follow them, or the annotation on those boxes is thrown back to unknown.
+try:
+    from build_dataset_ouo import SYNONYMS
+    ALIAS.update(SYNONYMS)
+except ImportError:      # the builder is optional; aliases above still apply
+    pass
 
 
 def canon(name):

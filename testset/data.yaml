@@ -1,7 +1,7 @@
 path: C:/Users/서동준/git/testset
 train: images
 val: images
-nc: 120
+nc: 114
 names:
 - absinthe
 - absolutecitron
@@ -14,13 +14,9 @@ names:
 - aperol
 - apricot
 - aromatic
+- bacardi_gold
+- bacardi_white
 - bacardiblack
-- bacardicartablanca
-- bacardicartaoro
-- bacardigold
-- bacardioro
-- bacardisuperior
-- bacardiwhiterum
 - baileys
 - ballantine12
 - ballantinefinest
@@ -114,11 +110,9 @@ names:
 - tina
 - triplesec
 - wildturkey
-- wildturkey_101proof
-- wildturkey_101proof_nolabel
+- wildturkey_101
 - wildturkey_81proof
 - wildturkey_8y
-- wildturkey_8y_nolabel
 - wildturkey_bourbon
 - wyborowa
 - xrated

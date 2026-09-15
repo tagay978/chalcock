@@ -259,8 +259,9 @@ def card(frames, lines, seconds=3.0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s",
-                                                      "weights", "best.pt"))
+    ap.add_argument("--weights", default=next(
+        (p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
+                     for r in ("yolo11s_v3", "yolo11s_v2", "yolo11s")) if os.path.exists(p)), ""))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--n", type=int, default=5, help="how many photos to show")

@@ -227,6 +227,41 @@ substring — `sloegin` is a liqueur rather than gin, `chartreuseyellow` is not 
 Amaro Nonino is an amaro rather than a grappa. That cut the classes stuck on a generic `liqueur`
 from 42 to 15.
 
+## Duplicate classes, and the recall they were costing
+
+Absolut Vodka and the Bacardi rums were not being detected at all. The cause was not missing
+data or unmerged boxes - 209 of the 3,417 merged photos do carry boxes from more than one source
+folder, and only 5% of visible bottles are unlabelled - it was the class list itself.
+
+The symptom named it: precision high, recall collapsed. `bacardicartablanca` scored P 1.00 / R
+0.22, `bacardiblack` P 1.00 / R 0.00. A model that is right when it fires and almost never fires
+is being asked to separate classes it cannot tell apart. Checked against the reference crops,
+several were literally the same bottle:
+
+- `bacardicartaoro`, `bacardioro`, `bacardigold` — one gold rum under three names
+- `bacardicartablanca`, `bacardisuperior`, `bacardiwhiterum` — one white rum; all three crops
+  read "CARTA BLANCA" on the label
+- `wildturkey_101proof` / `_101proof_nolabel`, `wildturkey_8y` / `_8y_nolabel` — the same bottles
+  photographed with and without the neck label
+
+Merging them (119 → 113 classes) did what the diagnosis predicted:
+
+| class | before | after |
+| --- | --- | --- |
+| Bacardi gold | R 0.158 / 0.000 / 1.000 across three classes | **R 0.512**, mAP 0.432 |
+| Bacardi white | R 0.217 / 0.000 / 0.417 | **R 0.637**, mAP 0.645 |
+| Wild Turkey 101 | R 0.667 / 0.875 | R 0.783, mAP 0.757 |
+| all classes | R 0.431, mAP50-95 0.484 | **R 0.495, mAP50-95 0.508** |
+
+On the real-world set v3 scores 6/32 against v2's 7/32 — a one-bottle difference over 32
+in-vocabulary bottles, which that set cannot resolve. 223 of its 255 boxes are still
+`unknown_bottle`, so a correct naming there is counted as a false alarm rather than a hit. The
+bottleneck has moved from the model to the yardstick: finishing the annotation is what makes the
+next comparison mean anything.
+
+`wildturkey_81proof`, `wildturkey_bourbon` and `wildturkey_8y` were left separate. They may be
+genuinely different bottles, and for the recommender all three pour bourbon regardless.
+
 ## Experiment: teaching the model to abstain — and why it failed
 
 90% of the bottles in the test set are outside the 50, and the detector has no way to say so, so
