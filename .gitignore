@@ -33,3 +33,6 @@ ouo_final/
 
 # Ingredient-level dataset — rebuild with: python scripts/build_dataset_ouo.py --level ingredient
 dataset_ing/
+
+# Brand-family dataset — rebuild with: python scripts/build_dataset_ouo.py --level family
+dataset_fam/

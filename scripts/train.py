@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--device", default="0")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--save-period", type=int, default=20,
+                    help="also write weights/epochN.pt every N epochs, so intermediate models "
+                         "can be tested; -1 keeps only last and best")
     ap.add_argument("--cache", default="",
                     help="'ram' or 'disk'; off by default because caching camera originals in "
                          "RAM overflows the 32-bit offset buffer")
@@ -47,6 +50,7 @@ def main():
         workers=4,
         seed=0,
         cache=args.cache or False,
+        save_period=args.save_period,
         patience=50,
         close_mosaic=15,
         project=os.path.join(ROOT, "runs"),

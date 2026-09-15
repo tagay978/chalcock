@@ -65,6 +65,36 @@ SYNONYMS = {
 }
 
 
+# Brand families for --level family: variants of one brand collapsed to the brand.
+#
+# Most of these are free - every Ballantine's is scotch, every Camus is cognac - so the model
+# stops splitting its probability over label stripes it cannot read at shelf scale.
+#
+# Two are not free, and are here because they were asked for. Wild Turkey spans bourbon and rye,
+# and Absolut spans plain, citron and vanilla vodka; merging them means the recommender can no
+# longer tell a Manhattan's rye from a bourbon, or a Cosmopolitan's citron vodka from plain.
+# Both are marked below; drop them from this map to keep the distinction.
+FAMILIES = {
+    # mixes ingredients - see above
+    "wildturkey": ["wildturkey", "wildturkey_101", "wildturkey_81proof", "wildturkey_8y",
+                   "wildturkey_bourbon"],
+    "absolutevodka": ["absolutevodka", "absolutecitron", "absolutevanilla"],
+    # same ingredient throughout
+    "ballantine": ["ballantine12", "ballantinefinest", "ballantinemasters"],
+    "bushmills": ["bushmillsblackbush", "bushmillsoriginal"],
+    "camus": ["camus_vsop", "camus_xo"],
+    "hennessy": ["hennessy_vsop", "hennessy_xo"],
+    "johnbarr": ["johnbarrfinest", "johnbarrreserve"],
+    "johnniewalker": ["johnnieblack", "johnniered"],
+    "josecuervo": ["josecuervoespecial", "josecuervoespecialsilver"],
+    "tanqueray": ["tanqueray", "tanquerayten"],
+}
+# Deliberately NOT merged: bacardi (gold vs white rum), havanaclub and captainmorgan (each spans
+# white, gold and dark), chartreuse (green and yellow are different liqueurs). Collapsing those
+# would remove ingredients recipes actually ask for.
+FAMILY_OF = {member: fam for fam, members in FAMILIES.items() for member in members}
+
+
 # Each spirit category maps to the ingredient key data/ingredient_rules.yaml already speaks.
 CATEGORY_INGREDIENT = {
     "bitters": "aromatic_bitters", "blendedwhiskey": "scotch", "bourbonwhiskey": "bourbon",
@@ -137,7 +167,7 @@ def fingerprint(path):
         return im.size, imagehash.phash(im)
 
 
-def scan_ouo(skipped):
+def scan_ouo(skipped, level="brand"):
     records = []
     for cat in sorted(os.listdir(OUO)):
         cdir = os.path.join(OUO, cat)
@@ -172,7 +202,10 @@ def scan_ouo(skipped):
                     # calvados/1 has a folder and a class both literally named "1".
                     if not name or name.isdigit():
                         name = cat
-                    boxes.append((SYNONYMS.get(name, name), *xywh))
+                    name = SYNONYMS.get(name, name)
+                    if level == "family":
+                        name = FAMILY_OF.get(name, name)
+                    boxes.append((name, *xywh))
                 try:
                     size, ph = fingerprint(ipath)
                 except Exception:
@@ -185,7 +218,7 @@ def scan_ouo(skipped):
     return records
 
 
-def scan_old(skipped, ouo_names):
+def scan_old(skipped, ouo_names, level="brand"):
     """Read the old merge, renaming its classes onto ouo_final's spelling.
 
     The two sets write the same bottle differently - `camusvsop` against `camus_vsop` - so
@@ -205,6 +238,8 @@ def scan_old(skipped, ouo_names):
     if unmatched:
         print(f"  old classes with no counterpart in ouo_final: {', '.join(unmatched)}")
     names = [SYNONYMS.get(rename[n], rename[n]) for n in names]
+    if level == "family":
+        names = [FAMILY_OF.get(n, n) for n in names]
     records = []
     for split in ("train", "valid", "test"):
         idir = os.path.join(OLD, split, "images")
@@ -285,7 +320,7 @@ def main():
     ap.add_argument("--valid-frac", type=float, default=0.2)
     ap.add_argument("--test-frac", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--level", choices=["brand", "ingredient"], default="brand",
+    ap.add_argument("--level", choices=["brand", "family", "ingredient"], default="brand",
                     help="train on the 113 brands, or on what they pour. Ballantine's 12, Finest "
                          "and Masters differ by a label stripe and all three are scotch, so the "
                          "ingredient view trades distinctions the recommender never uses for "
@@ -300,9 +335,22 @@ def main():
         raise SystemExit(f"not found: {OUO}")
 
     global OUT
-    OUT = args.out or (OUT if args.level == "brand" else OUT.replace("dataset_v2", "dataset_ing"))
+    suffix = {"brand": "dataset_v2", "family": "dataset_fam", "ingredient": "dataset_ing"}
+    OUT = args.out or OUT.replace("dataset_v2", suffix[args.level])
 
     to_ingredient = None
+    if args.level == "family":
+        mixed = []
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import recommend as R
+        rules = R.Rules()
+        for fam, members in FAMILIES.items():
+            ings = {rules.bottle(m).get("ingredient") for m in members} - {None}
+            if len(ings) > 1:
+                mixed.append(f"{fam} ({', '.join(sorted(ings))})")
+        print(f"  folding {len(FAMILY_OF)} classes into {len(FAMILIES)} brand families")
+        if mixed:
+            print(f"  these families merge different ingredients: {'; '.join(mixed)}")
     if args.level == "ingredient":
         sys.path.insert(0, os.path.join(ROOT, "scripts"))
         import recommend as R
@@ -312,11 +360,11 @@ def main():
 
     skipped = Counter()
     print("scanning ouo_final ...")
-    records = scan_ouo(skipped)
+    records = scan_ouo(skipped, args.level)
     print(f"  {len(records)} labelled images, {sum(len(r['boxes']) for r in records)} boxes")
     print("scanning dataset ...")
     ouo_names = {b[0] for r in records for b in r["boxes"]}
-    old = scan_old(skipped, ouo_names)
+    old = scan_old(skipped, ouo_names, args.level)
     print(f"  {len(old)} labelled images, {sum(len(r['boxes']) for r in old)} boxes")
     records += old
     for k, v in skipped.items():
