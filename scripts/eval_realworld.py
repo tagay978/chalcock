@@ -89,10 +89,15 @@ def iou(a, b):
     return inter / ((ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - inter)
 
 
-def load_truth(names, trained):
+def load_truth(names, can_emit):
     """Read the annotations, split per image into in-vocabulary and out-of-vocabulary boxes.
 
-    Out-of-vocabulary is wider than the `unknown_bottle` proposal class: an annotator who
+    `can_emit(class_id)` decides the split, and it has to be asked in the same terms the
+    comparison uses. A brand model is judged on whether it knows `gordons`; an ingredient model
+    predicts `gin` and never emits a brand name at all, so asking it about `gordons` would put
+    every annotation on the out-of-vocabulary side and report nothing to measure.
+
+    Out-of-vocabulary is also wider than the `unknown_bottle` proposal class: an annotator who
     recognises a bottle the model was never trained on (Campari, Jack Daniel's) may well name it,
     and counting those as missed detections would punish the model for lacking an output it
     never had. Anything the model cannot emit belongs on the open-set side.
@@ -110,7 +115,7 @@ def load_truth(names, trained):
                     continue
                 cid = int(parts[0])
                 box = (cid, *(float(v) for v in parts[1:5]))
-                in_vocab = 0 <= cid < len(names) and canon(names[cid]) in trained
+                in_vocab = 0 <= cid < len(names) and can_emit(cid)
                 (known if in_vocab else unknown).append(box)
         truth[fn] = (known, unknown)
     return truth
@@ -255,10 +260,17 @@ def main():
     # The abstain class is an output, not a brand. A model that can predict unknown_bottle must
     # still have every unknown_bottle annotation counted on the out-of-vocabulary side, or the
     # two sets swap and adding the class looks like it made 229 bottles suddenly recognisable.
-    trained = {canon(n) for n in brand.names.values()} - {canon(UNKNOWN)}
 
     model_names = [brand.names[i] for i in range(len(brand.names))]
-    truth = load_truth(names, trained)
+
+    levels = ["ingredient", "brand"] if args.level == "both" else [args.level]
+    # Whether a bottle counts as in-vocabulary depends on the level being scored, so build the
+    # keys first and ask them.
+    keys = {lv: (make_key(names, lv), make_key(model_names, lv)) for lv in levels}
+    primary = levels[0]
+    gt_key0, pred_key0 = keys[primary]
+    emittable = {pred_key0(i) for i in range(len(model_names))} - {canon(UNKNOWN)}
+    truth = load_truth(names, lambda cid: gt_key0(cid) in emittable)
     total_known = sum(len(k) for k, _ in truth.values())
     total_unknown = sum(len(u) for _, u in truth.values())
     print(f"test set: {len(truth)} photos, {total_known} in-vocabulary bottles, "
@@ -286,7 +298,6 @@ def main():
     if abstain_id is not None:
         print(f"  model has an abstain class ('{UNKNOWN}', id {abstain_id})")
 
-    levels = ["ingredient", "brand"] if args.level == "both" else [args.level]
     for conf in [float(c) for c in args.conf.split(",")]:
         print(f"\n=== conf {conf} ===")
         for path_name in [p.strip() for p in args.paths.split(",")]:
@@ -296,8 +307,8 @@ def main():
                 preds[fn] = (predict_direct(brand, image, conf) if path_name == "direct"
                              else predict_two_stage(coco, brand, image, conf))
             for level in levels:
-                stats = evaluate(truth, preds, abstain_id, make_key(names, level),
-                                 make_key(model_names, level))
+                gk, pk = keys[level]
+                stats = evaluate(truth, preds, abstain_id, gk, pk)
                 report(f"{path_name} [{level}]", stats, abstain_id is not None)
 
 

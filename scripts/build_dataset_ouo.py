@@ -25,6 +25,8 @@ import re
 import shutil
 from collections import Counter, defaultdict
 
+import sys
+
 import imagehash
 import yaml
 from PIL import Image
@@ -283,6 +285,12 @@ def main():
     ap.add_argument("--valid-frac", type=float, default=0.2)
     ap.add_argument("--test-frac", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--level", choices=["brand", "ingredient"], default="brand",
+                    help="train on the 113 brands, or on what they pour. Ballantine's 12, Finest "
+                         "and Masters differ by a label stripe and all three are scotch, so the "
+                         "ingredient view trades distinctions the recommender never uses for "
+                         "roughly five times the data per class.")
+    ap.add_argument("--out", default=None, help="output directory; defaults by --level")
     ap.add_argument("--max-side", type=int, default=1280,
                     help="cap the long edge on copy; ouo_final holds camera originals up to "
                          "3024x4032, and training resizes to 640 anyway")
@@ -290,6 +298,17 @@ def main():
 
     if not os.path.isdir(OUO):
         raise SystemExit(f"not found: {OUO}")
+
+    global OUT
+    OUT = args.out or (OUT if args.level == "brand" else OUT.replace("dataset_v2", "dataset_ing"))
+
+    to_ingredient = None
+    if args.level == "ingredient":
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import recommend as R
+        rules = R.Rules()
+        to_ingredient = lambda n: (rules.bottle(n).get("ingredient")
+                                   or CATEGORY_INGREDIENT.get(n, n))
 
     skipped = Counter()
     print("scanning ouo_final ...")
@@ -302,6 +321,21 @@ def main():
     records += old
     for k, v in skipped.items():
         print(f"  skipped {v}x {k}")
+
+    if to_ingredient is not None:
+        unresolved = Counter()
+        for r in records:
+            mapped = []
+            for name, *xywh in r["boxes"]:
+                ing = to_ingredient(name)
+                if not ing or ing in ("unknown", ""):
+                    unresolved[name] += 1
+                    ing = CATEGORY_INGREDIENT.get(r["category"] or "", name)
+                mapped.append((ing, *xywh))
+            r["boxes"] = mapped
+        if unresolved:
+            print(f"  {len(unresolved)} classes fell back to their category: "
+                  f"{', '.join(list(unresolved)[:6])}")
 
     groups, near = group(records)
     from_old = sum(1 for g in groups if all(records[i]["source"] == "old" for i in g))
