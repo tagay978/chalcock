@@ -262,6 +262,41 @@ next comparison mean anything.
 `wildturkey_81proof`, `wildturkey_bourbon` and `wildturkey_8y` were left separate. They may be
 genuinely different bottles, and for the recommender all three pour bourbon regardless.
 
+## Training on what the bottle pours, not which bottle it is
+
+113 brand classes average 67 training boxes each, and many of the distinctions cost recall while
+buying the recommender nothing: Ballantine's 12, Finest and Masters differ by a stripe on the
+label and all three pour scotch. `build_dataset_ouo.py --level ingredient` maps every brand
+through the same ingredient map the recommender already uses — 52 classes, ~245 boxes each.
+
+It wins on every axis that matters, scored at ingredient level with two-stage inference:
+
+| model | classes | conf | found | named right | naming accuracy | false alarms |
+| --- | --- | --- | --- | --- | --- | --- |
+| brand v1 | 50 | 0.02 | 14/26 | 10/26 | 71.4% | 22.7% |
+| brand v3 | 113 | 0.03 | 18/32 | 6/32 | 33.3% | 26.9% |
+| **ingredient** | 52 | 0.4 | 14/28 | **12/28** | **85.7%** | **12.3%** |
+
+The shape of the curve matters as much as the peak. Raising the threshold destroyed the brand
+models — v3 falls from 6 correct to 3 by conf 0.2 — while the ingredient model holds 12 correct
+from conf 0.03 all the way to 0.4 and simply sheds false alarms, 71.8% down to 12.3%. At conf 0.7
+it is right about every bottle it names. That is an operating curve you can actually tune; the
+brand models had none.
+
+Its confidences are also honest: 0.80 and 0.86 on the demo photos where the 113-class model
+scored 0.11. Splitting one visual identity across several labels had been dividing the softmax
+between classes nothing could separate.
+
+### One-stage became viable too
+
+With the old 50-class set, running the detector straight at the photo found 2 bottles out of 26
+because every training box was a close-up: median 19.8% of the frame against 1.24% in a real
+shelf photo. ouo_final includes shelf-scale shots, and the training distribution now straddles
+reality — p25 of 0.92% against that 1.24% median. One-stage finds far more as a result (31/32 at
+conf 0.02) but sprays 947 predictions over 255 annotated bottles, a 90% false alarm rate. Two
+stage stays the default: COCO vouching for "there is a bottle here" is what keeps the recommender
+from inventing ingredients.
+
 ## Experiment: teaching the model to abstain — and why it failed
 
 90% of the bottles in the test set are outside the 50, and the detector has no way to say so, so

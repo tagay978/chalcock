@@ -46,14 +46,20 @@ def load_models(weights: str, coco_weights: str):
     state["recipes"] = R.json.load(
         open(os.path.join(ROOT, "data", "iba_cocktails.json"), encoding="utf-8"))["cocktails"]
     state["abstains"] = R.ABSTAIN in state["brand"].names.values()
-    # Confidence is not comparable across models: 119 classes split the softmax far more
-    # finely than 50, so the same 0.25 cut means something quite different. Measured best
-    # operating points were 0.02-0.15 for the 50-class model and 0.05 for the 119-class one.
-    state["default_conf"] = 0.25 if len(state["brand"].names) <= 60 else 0.05
+    # Confidence does not transfer between models. Measured best operating points on the
+    # real-world set: 0.02-0.25 for the 50-class brand model, 0.05 for the 113-class one, and
+    # 0.4 for the ingredient-level model, which stays correct as the threshold rises where the
+    # brand models fall apart.
+    classes = set(state["brand"].names.values())
+    state["ingredient_level"] = len(classes & state["rules"]._ingredients) > len(classes) / 2
+    state["default_conf"] = (0.4 if state["ingredient_level"]
+                             else 0.25 if len(classes) <= 60 else 0.05)
     state["photos"] = load_photo_credits()
     print(f"cocktail photos: {len(state['photos'])}")
     print(f"brand model: {os.path.relpath(weights, ROOT)} "
-          f"({len(state['brand'].names)} classes, default conf {state['default_conf']}, "
+          f"({len(state['brand'].names)} "
+          f"{'ingredient' if state['ingredient_level'] else 'brand'} classes, "
+          f"default conf {state['default_conf']}, "
           f"{'can abstain' if state['abstains'] else 'no abstain class'})")
 
 
@@ -204,7 +210,8 @@ def info():
     rules = state["rules"]
     return {"classes": len(state["brand"].names), "abstains": state["abstains"],
             "recipes": len(state["recipes"]), "bottles": len(rules.bottles),
-            "default_conf": state["default_conf"]}
+            "default_conf": state["default_conf"],
+            "level": "ingredient" if state["ingredient_level"] else "brand"}
 
 
 @app.get("/api/samples")
@@ -275,7 +282,7 @@ def main():
     # Newest usable run first. The 51-class abstain model is deliberately not in this list:
     # it measured worse on real photos, for the reason the README records.
     default = next((p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
-                                for r in ("yolo11s_v3", "yolo11s_v2", "yolo11s"))
+                                for r in ("yolo11s_ing", "yolo11s_v3", "yolo11s_v2", "yolo11s"))
                     if os.path.exists(p)), "")
     ap.add_argument("--weights", default=default)
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))

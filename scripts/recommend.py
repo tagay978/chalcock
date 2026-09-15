@@ -81,12 +81,25 @@ class Rules:
         # Lookup that tolerates the two spellings of the same bottle.
         self._by_canon = {canon(k): k for k in self.bottles}
 
+        # Every ingredient key the rules know about, so a detector trained at ingredient level
+        # (whose classes ARE these keys) resolves without a bottle entry to look up.
+        self._ingredients = ({key for _, key in self.patterns}
+                             | {v.get("ingredient") for v in self.bottles.values()}) - {None}
+
     def bottle(self, cls):
-        """Resolve a predicted class name to its bottle entry across both vocabularies."""
+        """Resolve a predicted class name to its bottle entry.
+
+        Handles three vocabularies: the hand-written 50, the generated 113, and a model trained
+        with --level ingredient, whose class names are the ingredient keys themselves.
+        """
         if cls in self.bottles:
             return self.bottles[cls]
         hit = self._by_canon.get(canon(cls))
-        return self.bottles.get(hit, {}) if hit else {}
+        if hit:
+            return self.bottles[hit]
+        if cls in self._ingredients:
+            return {"label": cls.replace("_", " ").title(), "ingredient": cls}
+        return {}
 
     def normalize(self, line: str):
         """Reduce one IBA ingredient line to (canonical_key | None, cleaned_text)."""
@@ -200,7 +213,7 @@ def main():
     ap.add_argument("--image", help="photo of the shelf; runs the detector")
     ap.add_argument("--weights", default=next(
         (p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
-                     for r in ("yolo11s_v3", "yolo11s_v2", "yolo11s")) if os.path.exists(p)), ""))
+                     for r in ("yolo11s_ing", "yolo11s_v3", "yolo11s_v2", "yolo11s")) if os.path.exists(p)), ""))
     ap.add_argument("--conf", type=float, default=0.35)
     ap.add_argument("--one-stage", dest="two_stage", action="store_false",
                     help="run the detector straight at the photo; finds far less on real shelves")
