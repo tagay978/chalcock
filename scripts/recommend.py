@@ -45,6 +45,11 @@ def load(name):
         return yaml.safe_load(fh)
 
 
+def canon(name):
+    """Ignore punctuation and case: the 50-class map says `camusvsop`, ouo_final `camus_vsop`."""
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
 class Rules:
     def __init__(self):
         cfg = load("ingredient_rules.yaml")
@@ -52,7 +57,36 @@ class Rules:
         self.pantry = set(cfg["pantry"])
         self.equivalents = {k: set(v) for k, v in (cfg.get("equivalents") or {}).items()}
         self.substitutes = {k: set(v) for k, v in (cfg.get("substitutes") or {}).items()}
-        self.bottles = load("bottles.yaml")["bottles"]
+
+        # The hand-written 50-class map, plus the 119-class one generated from ouo_final's
+        # category folders, so a detector trained on either vocabulary resolves to ingredients.
+        self.bottles = dict(load("bottles.yaml")["bottles"])
+        generated = os.path.join(ROOT, "dataset_v2", "class_ingredients.yaml")
+        if os.path.exists(generated):
+            extra = (yaml.safe_load(open(generated, encoding="utf-8")) or {}).get("bottles") or {}
+            known = {canon(k) for k in self.bottles}
+            for k, v in extra.items():
+                if canon(k) not in known:
+                    self.bottles[k] = v
+        # ouo_final files 42 brands under one `liqueur` folder, which is too coarse to match a
+        # recipe. The ingredient patterns below already know aperol, campari, absinthe and the
+        # rest by name, so run the brand through them and keep the category only as a fallback.
+        for name, entry in self.bottles.items():
+            if entry.get("ingredient") not in (None, "", "liqueur", "unknown"):
+                continue
+            key, _ = self.normalize(name)
+            if key and key not in self.pantry:
+                entry["ingredient"] = key
+
+        # Lookup that tolerates the two spellings of the same bottle.
+        self._by_canon = {canon(k): k for k in self.bottles}
+
+    def bottle(self, cls):
+        """Resolve a predicted class name to its bottle entry across both vocabularies."""
+        if cls in self.bottles:
+            return self.bottles[cls]
+        hit = self._by_canon.get(canon(cls))
+        return self.bottles.get(hit, {}) if hit else {}
 
     def normalize(self, line: str):
         """Reduce one IBA ingredient line to (canonical_key | None, cleaned_text)."""
@@ -202,18 +236,18 @@ def main():
             found = detect(args.image, args.weights, args.conf)
         print(f"detected in {os.path.basename(args.image)}:")
         for cls, n in found.most_common():
-            print(f"  {rules.bottles.get(cls, {}).get('label', cls)}" + (f" x{n}" if n > 1 else ""))
+            print(f"  {rules.bottle(cls).get('label', cls)}" + (f" x{n}" if n > 1 else ""))
         classes = list(found)
     elif args.bottles:
         classes = [c.strip() for c in args.bottles.split(",") if c.strip()]
     else:
         ap.error("pass --bottles or --image")
 
-    unknown_cls = [c for c in classes if c not in rules.bottles]
+    unknown_cls = [c for c in classes if not rules.bottle(c)]
     if unknown_cls:
         sys.exit(f"unknown bottle class: {', '.join(unknown_cls)}")
 
-    have = {rules.bottles[c]["ingredient"] for c in classes}
+    have = {rules.bottle(c)["ingredient"] for c in classes}
     have |= {a.strip() for a in args.assume.split(",") if a.strip()}
     print(f"\nshelf: {len(classes)} bottles -> {len(have)} ingredients "
           f"({', '.join(sorted(have))})\n")

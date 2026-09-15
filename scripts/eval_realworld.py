@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from collections import Counter
 
 import yaml
@@ -31,27 +32,45 @@ COCO_BOTTLE = 39
 IOU_MATCH = 0.5
 
 
+def canon(name):
+    """Ignore punctuation and case: the annotations say `camusvsop`, ouo_final `camus_vsop`."""
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
 def ingredient_map():
-    """class name -> what it pours, so Johnnie Walker Red and Black both read as scotch.
+    """canonical class name -> what it pours, so Johnnie Walker Red and Black both read as scotch.
 
     Brand accuracy is the harder question, but the recommender only ever asks what is in the
     bottle: naming a Gold Label as Black Label costs nothing downstream, while calling it a
     cognac proposes a drink that cannot be made.
+
+    Two sources: the hand-written 50-class map, and the 119-class one generated from ouo_final's
+    category folders. Later entries do not overwrite earlier ones, so the hand-written map wins.
     """
-    path = os.path.join(ROOT, "data", "bottles.yaml")
-    bottles = yaml.safe_load(open(path, encoding="utf-8"))["bottles"]
-    return {k: v["ingredient"] for k, v in bottles.items()}
+    out = {}
+    for path in (os.path.join(ROOT, "data", "bottles.yaml"),
+                 os.path.join(ROOT, "dataset_v2", "class_ingredients.yaml")):
+        if not os.path.exists(path):
+            continue
+        bottles = (yaml.safe_load(open(path, encoding="utf-8")) or {}).get("bottles") or {}
+        for k, v in bottles.items():
+            out.setdefault(canon(k), v.get("ingredient", k))
+    return out
 
 
 def make_key(names, level):
-    """Build id -> comparison key. At brand level that is the class; at ingredient level it is
-    what the bottle pours, with anything unmapped kept distinct under its own name."""
-    if level == "brand":
-        return lambda cid: names[cid] if cid < len(names) else f"?{cid}"
-    ing = ingredient_map()
+    """Build id -> comparison key for one name list.
+
+    Predictions and annotations come from different vocabularies - a 119-class model against a
+    test set labelled with 50 - so each side needs its own key built from its own names, and both
+    are canonicalised before comparison.
+    """
+    ing = ingredient_map() if level != "brand" else {}
+
     def key(cid):
-        name = names[cid] if cid < len(names) else f"?{cid}"
-        return ing.get(name, name)
+        name = names[cid] if 0 <= cid < len(names) else f"?{cid}"
+        c = canon(name)
+        return c if level == "brand" else ing.get(c, c)
     return key
 
 
@@ -91,7 +110,7 @@ def load_truth(names, trained):
                     continue
                 cid = int(parts[0])
                 box = (cid, *(float(v) for v in parts[1:5]))
-                in_vocab = cid < len(names) and names[cid] in trained
+                in_vocab = 0 <= cid < len(names) and canon(names[cid]) in trained
                 (known if in_vocab else unknown).append(box)
         truth[fn] = (known, unknown)
     return truth
@@ -138,7 +157,7 @@ def predict_two_stage(coco, brand, path, conf, pad=0.15):
     return out
 
 
-def evaluate(truth, predictions, abstain_id=None, key=None):
+def evaluate(truth, predictions, abstain_id=None, key=None, pred_key=None):
     """Match predictions to annotations and count the outcomes that matter.
 
     Prediction ids are the model's, ground-truth ids are the test set's; they agree because
@@ -151,6 +170,7 @@ def evaluate(truth, predictions, abstain_id=None, key=None):
     model quieter.
     """
     key = key or (lambda cid: cid)
+    pred_key = pred_key or key
     stats = dict(known=0, localised=0, correct=0, abstained_known=0,
                  unknown=0, unknown_hit=0, abstained_unknown=0,
                  preds=0, named_preds=0)
@@ -177,7 +197,7 @@ def evaluate(truth, predictions, abstain_id=None, key=None):
                 stats["localised"] += 1
                 if preds[best][0] == abstain_id:
                     stats["abstained_known"] += 1
-                elif key(preds[best][0]) == key(gt[0]):
+                elif pred_key(preds[best][0]) == key(gt[0]):
                     stats["correct"] += 1
 
         for gt in unknown:
@@ -235,8 +255,9 @@ def main():
     # The abstain class is an output, not a brand. A model that can predict unknown_bottle must
     # still have every unknown_bottle annotation counted on the out-of-vocabulary side, or the
     # two sets swap and adding the class looks like it made 229 bottles suddenly recognisable.
-    trained = set(brand.names.values()) - {UNKNOWN}
+    trained = {canon(n) for n in brand.names.values()} - {canon(UNKNOWN)}
 
+    model_names = [brand.names[i] for i in range(len(brand.names))]
     truth = load_truth(names, trained)
     total_known = sum(len(k) for k, _ in truth.values())
     total_unknown = sum(len(u) for _, u in truth.values())
@@ -275,7 +296,8 @@ def main():
                 preds[fn] = (predict_direct(brand, image, conf) if path_name == "direct"
                              else predict_two_stage(coco, brand, image, conf))
             for level in levels:
-                stats = evaluate(truth, preds, abstain_id, make_key(names, level))
+                stats = evaluate(truth, preds, abstain_id, make_key(names, level),
+                                 make_key(model_names, level))
                 report(f"{path_name} [{level}]", stats, abstain_id is not None)
 
 

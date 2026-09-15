@@ -28,6 +28,7 @@ patterns:
   - {match: "sparkling wine", key: sparkling_wine}
 
   # --- gin ---
+  - {match: "sloe gin", key: sloe_gin}
   - {match: "old tom gin", key: old_tom_gin}
   - {match: "gin", key: gin}
 

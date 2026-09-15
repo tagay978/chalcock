@@ -134,7 +134,7 @@ def photo_panel(image, results, revealed, rules):
             draw.rectangle(b, outline=GREY, width=2)
             continue
         draw.rectangle(b, outline=GREEN, width=3)
-        label = rules.bottles.get(name, {}).get("label", name)
+        label = rules.bottle(name).get("label", name)
         text = f"{label} {score:.2f}"
         tb = draw.textbbox((0, 0), text, font=F_SMALL)
         tw, th = tb[2] - tb[0], tb[3] - tb[1]
@@ -148,7 +148,7 @@ def segment(frames, path, brand, coco, conf, rules, recipes, index, total, two_s
     image, results = analyse(path, brand, coco, conf, two_stage)
     named = [(b, n, s) for b, n, s in results if n]
     classes = [n for _, n, _ in named]
-    have = {rules.bottles[c]["ingredient"] for c in classes if c in rules.bottles}
+    have = {rules.bottle(c)["ingredient"] for c in classes if rules.bottle(c)}
 
     makeable = []
     for c in recipes:
@@ -182,7 +182,7 @@ def segment(frames, path, brand, coco, conf, rules, recipes, index, total, two_s
             y += 26
             if named:
                 for _, name, score in named[:5]:
-                    label = rules.bottles.get(name, {}).get("label", name)
+                    label = rules.bottle(name).get("label", name)
                     draw.text((x + 22, y), f"· {label}", font=F_BODY, fill=TEXT)
                     draw.text((x + 300, y + 2), f"{score:.2f}", font=F_SMALL, fill=GREEN)
                     y += 28

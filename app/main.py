@@ -46,10 +46,14 @@ def load_models(weights: str, coco_weights: str):
     state["recipes"] = R.json.load(
         open(os.path.join(ROOT, "data", "iba_cocktails.json"), encoding="utf-8"))["cocktails"]
     state["abstains"] = R.ABSTAIN in state["brand"].names.values()
+    # Confidence is not comparable across models: 119 classes split the softmax far more
+    # finely than 50, so the same 0.25 cut means something quite different. Measured best
+    # operating points were 0.02-0.15 for the 50-class model and 0.05 for the 119-class one.
+    state["default_conf"] = 0.25 if len(state["brand"].names) <= 60 else 0.05
     state["photos"] = load_photo_credits()
     print(f"cocktail photos: {len(state['photos'])}")
     print(f"brand model: {os.path.relpath(weights, ROOT)} "
-          f"({len(state['brand'].names)} classes, "
+          f"({len(state['brand'].names)} classes, default conf {state['default_conf']}, "
           f"{'can abstain' if state['abstains'] else 'no abstain class'})")
 
 
@@ -149,7 +153,7 @@ def draw(image, boxes, detected, rules):
         if hit is None:
             pen.rectangle(box, outline=DECLINED, width=2)
             continue
-        label = rules.bottles.get(hit["cls"], {}).get("label", hit["cls"])
+        label = rules.bottle(hit["cls"]).get("label", hit["cls"])
         text = f"{label} {hit['conf']:.2f}"
         pen.rectangle(box, outline=NAMED, width=max(3, W // 300))
         tb = pen.textbbox((0, 0), text, font=label_font)
@@ -162,7 +166,7 @@ def draw(image, boxes, detected, rules):
 
 def match_cocktails(classes, loose: bool):
     rules, recipes = state["rules"], state["recipes"]
-    have = {rules.bottles[c]["ingredient"] for c in classes if c in rules.bottles}
+    have = {rules.bottle(c)["ingredient"] for c in classes if rules.bottle(c)}
     makeable, nearly = [], []
     for c in recipes:
         bar, _, _ = R.recipe_requirements(c, rules)
@@ -199,7 +203,8 @@ def index():
 def info():
     rules = state["rules"]
     return {"classes": len(state["brand"].names), "abstains": state["abstains"],
-            "recipes": len(state["recipes"]), "bottles": len(rules.bottles)}
+            "recipes": len(state["recipes"]), "bottles": len(rules.bottles),
+            "default_conf": state["default_conf"]}
 
 
 @app.get("/api/samples")
@@ -221,7 +226,7 @@ def sample(name: str):
 
 
 @app.post("/api/detect")
-async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool = False,
+async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = False,
                  two_stage: bool = True):
     raw = await file.read()
     try:
@@ -232,7 +237,7 @@ async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool =
     if max(image.size) > 1600:            # keep inference and the response payload sane
         image.thumbnail((1600, 1600))
 
-    canvas, detected, declined, total = analyse(image, conf, two_stage)
+    canvas, detected, declined, total = analyse(image, conf or state["default_conf"], two_stage)
     classes = [d["cls"] for d in detected]
     have, makeable, nearly = match_cocktails(classes, loose)
 
@@ -245,9 +250,10 @@ async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool =
         if d["cls"] in seen:
             continue
         seen.add(d["cls"])
+        entry = rules.bottle(d["cls"])
         bottles.append({"cls": d["cls"],
-                        "label": rules.bottles.get(d["cls"], {}).get("label", d["cls"]),
-                        "ingredient": rules.bottles.get(d["cls"], {}).get("ingredient", "?"),
+                        "label": entry.get("label", d["cls"]),
+                        "ingredient": entry.get("ingredient", "?"),
                         "conf": d["conf"]})
 
     return {

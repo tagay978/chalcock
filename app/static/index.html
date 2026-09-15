@@ -146,7 +146,7 @@
   <h1>술장 사진으로 <span>만들 수 있는 칵테일</span> 찾기</h1>
   <p class="sub">사진 속 병을 검출해 브랜드를 식별하고, 보유 재료로 만들 수 있는 IBA 공식 칵테일을 추천합니다.</p>
   <div class="chips">
-    <span class="chip">YOLO11 · 50 brands</span>
+    <span class="chip" id="chip-brands">YOLO11</span>
     <span class="chip" id="chip-stage">2-stage detection (COCO crop)</span>
     <span class="chip" id="chip-recipes">IBA 102 cocktails</span>
     <span class="chip" id="chip-abstain">—</span>
@@ -166,7 +166,7 @@
       <div class="samples" id="samples"></div>
 
       <div class="controls">
-        <label>신뢰도 <input type="range" id="conf" min="0.05" max="0.8" step="0.05" value="0.25">
+        <label>신뢰도 <input type="range" id="conf" min="0.01" max="0.8" step="0.01" value="0.25">
           <b id="confval">0.25</b></label>
         <label><input type="checkbox" id="loose"> 유사 재료 대체 허용</label>
         <label><input type="checkbox" id="twostage" checked> 2단계 검출 (COCO 크롭)</label>
@@ -200,14 +200,18 @@
 
 <footer>
   <b>이 데모의 실제 성능</b> — 손으로 라벨링한 실사 테스트셋(사진 27장, 병 255개) 기준입니다.
-  학습셋 검증 mAP는 0.94지만 같은 촬영 세션에서 나온 값이라 실사용 성능이 아닙니다.
+  학습셋 검증 점수는 같은 촬영 세션에서 나온 값이라 실사용 성능이 아닙니다.
+  아래는 각 모델을 자기 최적 임계값에서 비교한 것입니다. 119클래스 모델은 확률이 더 잘게 나뉘어
+  0.05에서, 50클래스 모델은 0.02에서 가장 잘 동작합니다.
   <table>
-    <tr><th>지표</th><th>값</th><th></th></tr>
-    <tr><td>병 위치 검출</td><td>7 / 26</td><td>학습된 50종에 한해</td></tr>
-    <tr><td>재료 정확도 (검출된 병)</td><td>71.4%</td><td>추천에 실제로 쓰이는 기준</td></tr>
-    <tr><td>브랜드 정확도 (검출된 병)</td><td>28.6%</td><td>Gold/Black Label 구분 등</td></tr>
-    <tr><td>어휘 밖 병 비율</td><td>90%</td><td>실제 바는 50종 밖 병이 대부분</td></tr>
+    <tr><th>모델</th><th>병 검출</th><th>이름 정답</th><th>이름 정확도</th><th>오경보</th></tr>
+    <tr><td>50-class (v1)</td><td>14 / 26</td><td>10 / 26</td><td>71.4%</td><td>22.7%</td></tr>
+    <tr><td>119-class (v2)</td><td>14 / 28</td><td>6 / 28</td><td>42.9%</td><td>18.5%</td></tr>
   </table>
+  <p>테스트셋 라벨이 구 50종 어휘로 작성돼 있어 이 비교는 v2에 불리합니다 — v2의 나머지 69개
+  클래스는 맞아도 정답으로 집계될 수 없고, 맞춘 경우조차 오경보로 계산됩니다. 반면 v2는 재료
+  커버리지가 IBA 재료 77종 중 43종으로 넓어(50클래스는 23종) Daiquiri·Mojito·Cuba Libre처럼
+  화이트럼이 필요한 레시피가 비로소 가능해집니다.</p>
 </footer>
 
 </div>
@@ -239,7 +243,13 @@ $('#twostage').addEventListener('change', e => {
 
 fetch('/api/info').then(r => r.json()).then(d => {
   $('#chip-recipes').textContent = `IBA ${d.recipes} cocktails`;
-  $('#chip-abstain').textContent = d.abstains ? '기권 가능 (unknown_bottle)' : '기권 불가 (50-class)';
+  $('#chip-brands').textContent = `YOLO11 · ${d.classes} brands`;
+  $('#chip-abstain').textContent = d.abstains
+    ? '기권 가능 (unknown_bottle)' : `${d.bottles}종 재료 매핑`;
+  // A 119-class model is confident at 0.05 where a 50-class one wants 0.25; start where the
+  // loaded model actually works rather than at a number that returns nothing.
+  $('#conf').value = d.default_conf;
+  $('#confval').textContent = d.default_conf;
 });
 
 fetch('/api/samples').then(r => r.json()).then(list => {

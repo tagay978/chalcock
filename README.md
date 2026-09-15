@@ -188,6 +188,45 @@ Because the model cannot abstain, every one of those 229 is a chance to invent a
 and 7.4% of them take it at conf 0.25. That is what makes the recommender propose cocktails from
 bottles that are not on the shelf.
 
+## The 119-class model, and a threshold that is not comparable
+
+Trained on `dataset_v2`: 200 epochs, early-stopped at 85, best at 35. Its own test split reads
+mAP50 0.513 / mAP50-95 0.484 against the 50-class model's 0.952 / 0.940 — but those are different
+test sets over different vocabularies, and the v2 split is the harder one: 119 classes, and
+deduplication now spans both collections so near-duplicates no longer straddle train and test.
+
+On the real-world set the first comparison looked like a collapse — 0 correct at conf 0.25 — and
+that was a measurement error, not a result. **Confidence is not comparable across models with
+different class counts.** 119 classes divide the softmax mass far more finely, so v2 operates
+around 0.05 where v1 operates around 0.02–0.25. Swept properly, each at its own best point:
+
+| model | conf | found | named right | naming accuracy | false alarms |
+| --- | --- | --- | --- | --- | --- |
+| 50-class | 0.02 | 14/26 | **10/26 (38.5%)** | **71.4%** | 22.7% |
+| 50-class | 0.15 | 8/26 | 6/26 (23.1%) | 75.0% | 11.4% |
+| 119-class | 0.05 | 14/28 | 6/28 (21.4%) | 42.9% | 18.5% |
+
+The 50-class model still names better. Two things qualify that:
+
+- **The test set is labelled to the 50-class vocabulary**, so 69 of v2's classes cannot be
+  credited even when right, and a correct naming of, say, a Ballantine's counts as a false alarm
+  because the annotation says `unknown_bottle`. The comparison is structurally unfair to v2 and
+  cannot be fixed without re-annotating.
+- **Coverage is where v2 wins outright.** Its classes supply **43 of the 77** bar ingredients the
+  IBA list calls for, against 23 for the 50-class set. White rum, Campari, Aperol, Chartreuse,
+  absinthe and Bénédictine all enter the vocabulary — so Daiquiri, Mojito and Cuba Libre, the
+  three the README used to list as blocked, now actually appear in the demo.
+
+The app loads either and picks the threshold to match: 0.25 at or below 60 classes, 0.05 above.
+A fixed 0.25 on the 119-class model returns nothing at all, which is exactly the trap the first
+comparison fell into.
+
+`dataset_v2/class_ingredients.yaml` is generated from the category folders, and
+`data/bottles.yaml` overrides it where a category is too coarse or a pattern matches the wrong
+substring — `sloegin` is a liqueur rather than gin, `chartreuseyellow` is not the green one,
+Amaro Nonino is an amaro rather than a grappa. That cut the classes stuck on a generic `liqueur`
+from 42 to 15.
+
 ## Experiment: teaching the model to abstain — and why it failed
 
 90% of the bottles in the test set are outside the 50, and the detector has no way to say so, so

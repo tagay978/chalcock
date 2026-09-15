@@ -55,3 +55,19 @@ bottles:
   triplesec:                {label: "Triple Sec",                 ingredient: triple_sec}
   wildturkeykrye:           {label: "Wild Turkey Rye",            ingredient: rye}
   wyborowa:                 {label: "Wyborowa",                   ingredient: vodka}
+
+# Corrections for classes ouo_final's category folders place too coarsely, or that the
+# ingredient patterns mismatch on a substring. This file wins over the generated map.
+  sloegin:                  {label: "Sloe Gin",                   ingredient: sloe_gin}
+  chartreuseyellow:         {label: "Chartreuse Yellow",          ingredient: chartreuse_yellow}
+  chartreusegreen:          {label: "Chartreuse Green",           ingredient: chartreuse_green}
+  amarononino:              {label: "Amaro Nonino",               ingredient: amaro}
+  orange:                   {label: "Orange Bitters",             ingredient: orange_bitters}
+  aromatic:                 {label: "Aromatic Bitters",           ingredient: angostura_bitters}
+  bacardiwhiterum:          {label: "Bacardi White Rum",          ingredient: white_rum}
+  baileys:                  {label: "Baileys",                    ingredient: irish_cream}
+  chambord:                 {label: "Chambord",                   ingredient: raspberry_liqueur}
+  cremedecacao:             {label: "Crème de Cacao",             ingredient: creme_de_cacao_white}
+  cremedementhe:            {label: "Crème de Menthe",            ingredient: creme_de_menthe_green}
+  apricot:                  {label: "Apricot Brandy",             ingredient: apricot_brandy}
+  peychauds_bitters:        {label: "Peychaud's Bitters",         ingredient: peychauds_bitters}
