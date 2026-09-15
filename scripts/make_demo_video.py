@@ -74,7 +74,7 @@ def fade(frames, image, seconds=0.4, out=False):
         frames.write(cv2.cvtColor(blended, cv2.COLOR_RGB2BGR))
 
 
-def analyse(path, brand, coco, conf, two_stage=False):
+def analyse(path, brand, coco, conf, two_stage=True):
     """Same pass the app runs. One stage is the detector end to end; two stage lets COCO
     propose bottles first and names each crop, which finds more at shelf scale."""
     image = Image.open(path).convert("RGB")
@@ -259,15 +259,13 @@ def card(frames, lines, seconds=3.0):
 
 def main():
     ap = argparse.ArgumentParser()
-    default_abstain = os.path.join(ROOT, "runs", "yolo11s_abstain", "weights", "best.pt")
-    default_plain = os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt")
-    ap.add_argument("--weights", default=default_abstain if os.path.exists(default_abstain)
-                    else default_plain)
+    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s",
+                                                      "weights", "best.pt"))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--n", type=int, default=5, help="how many photos to show")
-    ap.add_argument("--two-stage", action="store_true",
-                    help="let COCO propose bottles first; finds more, names them worse")
+    ap.add_argument("--one-stage", dest="two_stage", action="store_false",
+                    help="run the detector straight at the photo instead of cropping first")
     ap.add_argument("--out", default=os.path.join(ROOT, "samples", "demo.mp4"))
     args = ap.parse_args()
 

@@ -65,7 +65,8 @@ python scripts/train.py                              # yolo11s, 200 epochs
 python scripts/train.py --model yolo11m.pt --epochs 300
 
 # 3. recommend
-python scripts/recommend.py --image shelf.jpg --weights runs/yolo11s/weights/best.pt
+python scripts/recommend.py --image shelf.jpg          # two-stage by default
+python scripts/recommend.py --image shelf.jpg --one-stage
 python scripts/recommend.py --bottles gordons,extradry,maraschino,orangebitters
 python scripts/recommend.py --bottles ... --loose --missing 1
 python scripts/recommend.py --check        # audit the rules against the recipe data
@@ -184,8 +185,10 @@ mines those instead. The contamination risk moves rather than vanishing: an unan
 may still be one of the 50, and `--exclude-recognised` drops the ones a trained model already
 names confidently, which on a sample removed about 9% of candidates.
 
-That retraining has not been run yet. The result above is the honest state: the first attempt at
-abstention failed, and the reason it failed is a dataset property, not a hyperparameter.
+That retraining has not been run. The 50-class model with two-stage inference is what the demo
+and the CLI use, because it is what measures best: the abstain weights are kept for comparison
+but are not the default anywhere. The honest state is that the first attempt at abstention
+failed, and the reason is a dataset property rather than a hyperparameter.
 
 ## Adding more images
 
@@ -294,10 +297,12 @@ exist. Test-set photos are offered as one-click samples, clicking a cocktail ope
 ingredients, method and a licensed photo, and the footer states the real-world accuracy, because
 a demo that only shows its successes is a lie by omission.
 
-Detection runs **single-stage** by default — the detector straight at the photo, end to end. The
-two-stage path (COCO proposes bottles, the brand model names each crop) is a checkbox, since it
-finds roughly four times as many bottles but names them far less accurately; having both in the
-UI makes that trade-off something you can show rather than assert.
+Detection runs **two-stage** by default: a COCO-pretrained detector finds the bottles, and the
+brand model names each crop. That is the configuration the measurements favour — 7/26 found
+against 2/26 for running the detector straight at the photo, because the brand model was trained
+on close-ups and a shelf bottle is 16x smaller in area than anything it saw. `--one-stage`, and
+the checkbox beside it in the UI, switch to the end-to-end path so the trade-off is something you
+can show rather than assert.
 
 `scripts/fetch_cocktail_images.py` collects one CC-licensed photo per cocktail from Wikimedia
 Commons (89 of 102 have one), with attribution in `app/static/cocktails/attribution.csv`. The

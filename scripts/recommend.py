@@ -166,8 +166,8 @@ def main():
     ap.add_argument("--image", help="photo of the shelf; runs the detector")
     ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
     ap.add_argument("--conf", type=float, default=0.35)
-    ap.add_argument("--two-stage", action="store_true",
-                    help="crop bottles with a COCO detector first; needed for real shelf photos")
+    ap.add_argument("--one-stage", dest="two_stage", action="store_false",
+                    help="run the detector straight at the photo; finds far less on real shelves")
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--assume", default="", help="extra ingredient keys you own, comma-separated")
     ap.add_argument("--loose", action="store_true", help="allow near substitutes (aged rum for white)")

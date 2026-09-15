@@ -83,7 +83,7 @@ def font(size):
     return ImageFont.load_default()
 
 
-def analyse(image: Image.Image, conf: float, two_stage: bool = False):
+def analyse(image: Image.Image, conf: float, two_stage: bool = True):
     """Name the bottles in a photo and draw the result.
 
     One stage runs the detector straight at the photo, which is the honest end-to-end path.
@@ -222,7 +222,7 @@ def sample(name: str):
 
 @app.post("/api/detect")
 async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool = False,
-                 two_stage: bool = False):
+                 two_stage: bool = True):
     raw = await file.read()
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
@@ -266,10 +266,9 @@ async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool =
 
 def main():
     ap = argparse.ArgumentParser()
-    default_abstain = os.path.join(ROOT, "runs", "yolo11s_abstain", "weights", "best.pt")
-    default_plain = os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt")
-    ap.add_argument("--weights", default=default_abstain if os.path.exists(default_abstain)
-                    else default_plain)
+    # The 51-class abstain model measured worse on real photos than this one; see the
+    # README. Point --weights at it deliberately if you want to compare.
+    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
