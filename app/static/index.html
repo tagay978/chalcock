@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shelf to Cocktail</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #161a22;
+    --panel-2: #1d222c;
+    --line: #272d3a;
+    --text: #e8eaf0;
+    --muted: #8d95a8;
+    --accent: #f0a04b;
+    --accent-dim: #8a5d29;
+    --green: #22c55e;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+
+  header { padding: 52px 0 30px; border-bottom: 1px solid var(--line); margin-bottom: 30px; }
+  h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.4px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin: 0; font-size: 15px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .chip {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+  }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+  .panel h2 { margin: 0 0 14px; font-size: 14px; text-transform: uppercase;
+              letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+
+  #drop {
+    border: 2px dashed var(--line); border-radius: var(--radius); padding: 36px 20px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); background: rgba(240,160,75,.06); }
+  #drop p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  #drop strong { font-size: 16px; }
+
+  .samples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .samples img {
+    width: 64px; height: 64px; object-fit: cover; border-radius: 8px; cursor: pointer;
+    border: 2px solid transparent; transition: border-color .15s;
+  }
+  .samples img:hover { border-color: var(--accent); }
+
+  .controls { display: flex; gap: 18px; align-items: center; margin-top: 16px; flex-wrap: wrap;
+              font-size: 13px; color: var(--muted); }
+  .controls input[type=range] { accent-color: var(--accent); }
+  .controls label { display: flex; gap: 7px; align-items: center; }
+
+  #shot { width: 100%; border-radius: 10px; display: block; }
+  .stats { display: flex; gap: 20px; margin-top: 14px; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 22px; color: var(--accent); line-height: 1.2; }
+  .stat span { font-size: 12px; color: var(--muted); }
+
+  .bottle { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
+            border-bottom: 1px solid var(--line); font-size: 14px; }
+  .bottle:last-child { border-bottom: 0; }
+  .bottle em { color: var(--muted); font-style: normal; font-size: 12px; }
+  .conf { color: var(--green); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+  .cocktail { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+              margin-bottom: 10px; background: var(--panel-2); }
+  .cocktail h3 { margin: 0 0 4px; font-size: 16px; }
+  .cocktail h3 a { color: inherit; text-decoration: none; }
+  .cocktail h3 a:hover { color: var(--accent); }
+  .cat { font-size: 11px; color: var(--accent-dim); text-transform: uppercase; letter-spacing: .6px; }
+  .cocktail ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .cocktail .method { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+  .miss { font-size: 12px; color: #ef8a8a; margin-top: 6px; }
+  .sub-note { font-size: 12px; color: var(--accent-dim); margin-top: 6px; }
+
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  .spin { display: none; color: var(--accent); font-size: 14px; }
+  .spin.on { display: block; }
+
+  footer { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: 13px; }
+  footer b { color: var(--text); }
+  footer table { border-collapse: collapse; margin-top: 12px; font-size: 12.5px; }
+  footer td, footer th { padding: 4px 14px 4px 0; text-align: left; }
+  footer th { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>술장 사진으로 <span>만들 수 있는 칵테일</span> 찾기</h1>
+  <p class="sub">사진 속 병을 검출해 브랜드를 식별하고, 보유 재료로 만들 수 있는 IBA 공식 칵테일을 추천합니다.</p>
+  <div class="chips">
+    <span class="chip">YOLO11 · 50 brands</span>
+    <span class="chip">COCO 2-stage detection</span>
+    <span class="chip" id="chip-recipes">IBA 102 cocktails</span>
+    <span class="chip" id="chip-abstain">—</span>
+  </div>
+</header>
+
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h2>사진 업로드</h2>
+      <div id="drop">
+        <strong>사진을 끌어다 놓거나 클릭</strong>
+        <p>술장·바 선반 사진 (JPG / PNG)</p>
+      </div>
+      <input type="file" id="file" accept="image/*" hidden>
+
+      <div class="samples" id="samples"></div>
+
+      <div class="controls">
+        <label>신뢰도 <input type="range" id="conf" min="0.05" max="0.8" step="0.05" value="0.25">
+          <b id="confval">0.25</b></label>
+        <label><input type="checkbox" id="loose"> 유사 재료 대체 허용</label>
+      </div>
+      <div class="spin" id="spin">분석 중…</div>
+    </div>
+
+    <div class="panel" id="shotpanel" style="margin-top:22px; display:none">
+      <h2>검출 결과</h2>
+      <img id="shot" alt="검출 결과">
+      <div class="stats" id="stats"></div>
+    </div>
+
+    <div class="panel" id="bottlepanel" style="margin-top:22px; display:none">
+      <h2>식별된 병</h2>
+      <div id="bottles"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>지금 만들 수 있는 칵테일</h2>
+      <div id="makeable"><p class="empty">사진을 올리면 결과가 표시됩니다.</p></div>
+    </div>
+    <div class="panel" id="nearlypanel" style="margin-top:22px; display:none">
+      <h2>한두 병만 더 있으면</h2>
+      <div id="nearly"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <b>이 데모의 실제 성능</b> — 손으로 라벨링한 실사 테스트셋(사진 27장, 병 255개) 기준입니다.
+  학습셋 검증 mAP는 0.94지만 같은 촬영 세션에서 나온 값이라 실사용 성능이 아닙니다.
+  <table>
+    <tr><th>지표</th><th>값</th><th></th></tr>
+    <tr><td>병 위치 검출</td><td>7 / 26</td><td>학습된 50종에 한해</td></tr>
+    <tr><td>재료 정확도 (검출된 병)</td><td>71.4%</td><td>추천에 실제로 쓰이는 기준</td></tr>
+    <tr><td>브랜드 정확도 (검출된 병)</td><td>28.6%</td><td>Gold/Black Label 구분 등</td></tr>
+    <tr><td>어휘 밖 병 비율</td><td>90%</td><td>실제 바는 50종 밖 병이 대부분</td></tr>
+  </table>
+</footer>
+
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const drop = $('#drop'), fileInput = $('#file');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) send(fileInput.files[0]); });
+$('#conf').addEventListener('input', e => $('#confval').textContent = e.target.value);
+
+let lastFile = null;
+$('#conf').addEventListener('change', () => lastFile && send(lastFile));
+$('#loose').addEventListener('change', () => lastFile && send(lastFile));
+
+fetch('/api/info').then(r => r.json()).then(d => {
+  $('#chip-recipes').textContent = `IBA ${d.recipes} cocktails`;
+  $('#chip-abstain').textContent = d.abstains ? '기권 가능 (unknown_bottle)' : '기권 불가 (50-class)';
+});
+
+fetch('/api/samples').then(r => r.json()).then(list => {
+  const box = $('#samples');
+  list.forEach(name => {
+    const img = document.createElement('img');
+    img.src = '/samples/' + name;
+    img.title = '이 사진으로 시험';
+    img.onclick = async () => {
+      const blob = await (await fetch('/samples/' + name)).blob();
+      send(new File([blob], name, { type: blob.type }));
+    };
+    box.appendChild(img);
+  });
+});
+
+async function send(file) {
+  lastFile = file;
+  $('#spin').classList.add('on');
+  const fd = new FormData();
+  fd.append('file', file);
+  const q = `?conf=${$('#conf').value}&loose=${$('#loose').checked}`;
+  try {
+    const res = await fetch('/api/detect' + q, { method: 'POST', body: fd });
+    const d = await res.json();
+    if (d.error) { alert(d.error); return; }
+    render(d);
+  } finally {
+    $('#spin').classList.remove('on');
+  }
+}
+
+function recipeCard(c, missing) {
+  const subs = c.subs && c.subs.length
+    ? `<div class="sub-note">대체 사용: ${c.subs.join(', ')}</div>` : '';
+  const miss = missing
+    ? `<div class="miss">필요: ${c.missing.join(', ')}</div>` : '';
+  return `<div class="cocktail">
+    <div class="cat">${c.category}</div>
+    <h3><a href="${c.url}" target="_blank" rel="noopener">${c.name}</a></h3>
+    <ul>${c.ingredients.map(i => `<li>${i}</li>`).join('')}</ul>
+    ${c.method ? `<p class="method">${c.method}</p>` : ''}
+    ${subs}${miss}
+  </div>`;
+}
+
+function render(d) {
+  $('#shotpanel').style.display = '';
+  $('#shot').src = d.image;
+  $('#stats').innerHTML = `
+    <div class="stat"><b>${d.bottles_found}</b><span>병 검출</span></div>
+    <div class="stat"><b>${d.named}</b><span>브랜드 식별</span></div>
+    <div class="stat"><b>${d.declined}</b><span>${d.abstains ? '기권' : '미식별'}</span></div>
+    <div class="stat"><b>${d.ingredients.length}</b><span>재료</span></div>`;
+
+  $('#bottlepanel').style.display = d.bottles.length ? '' : 'none';
+  $('#bottles').innerHTML = d.bottles.map(b =>
+    `<div class="bottle"><div>${b.label}<br><em>${b.ingredient}</em></div>
+     <div class="conf">${b.conf.toFixed(2)}</div></div>`).join('');
+
+  $('#makeable').innerHTML = d.makeable.length
+    ? d.makeable.map(c => recipeCard(c, false)).join('')
+    : `<p class="empty">${d.bottles.length
+        ? '식별된 재료로 정확히 만들 수 있는 IBA 칵테일이 없습니다. 아래 "한두 병만 더" 목록을 보세요.'
+        : '병을 식별하지 못했습니다. 신뢰도를 낮춰보세요.'}</p>`;
+
+  $('#nearlypanel').style.display = d.nearly.length ? '' : 'none';
+  $('#nearly').innerHTML = d.nearly.map(c => recipeCard(c, true)).join('');
+}
+</script>
+</body>
+</html>

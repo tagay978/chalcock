@@ -230,7 +230,9 @@ def main():
                 used[key] = src
         if not missing:
             makeable.append((c, used))
-        elif len(missing) <= args.missing:
+        elif len(missing) <= args.missing and used:
+            # `used` matters: a shelf of scotch alone is genuinely one bottle from a Bellini,
+            # and saying so is useless. A near miss has to build on something you have.
             short.append((c, missing))
 
     print(f"=== makeable now: {len(makeable)} of {len(recipes)} IBA cocktails ===")

@@ -232,6 +232,30 @@ redistribution or publication. Anything harvested by `harvest_images.py` is lice
 download and attributed in `harvest/attribution.csv`; the original set is not. Worth resolving
 before the dataset ships with a paper.
 
+## Demo
+
+A web service, the same one the pipeline was originally built for: upload a shelf photo, get
+the bottles it can name and the IBA cocktails those make.
+
+```bash
+pip install fastapi "uvicorn[standard]" python-multipart
+python app/main.py                 # http://127.0.0.1:8000
+```
+
+It imports `scripts/recommend.py` rather than reimplementing the matching, so the demo cannot
+drift from the measured numbers, and it picks up the abstain weights automatically when they
+exist. Test-set photos are offered as one-click samples. The page states the real-world accuracy
+in its footer, because a demo that only shows its successes is a lie by omission.
+
+```bash
+python scripts/make_demo_video.py --n 5      # samples/demo.mp4
+```
+
+renders a portfolio video of the same pipeline on real test photos — bottles found, named or
+declined, cocktails that follow — closing on the measured numbers rather than the flattering
+ones. Photos are ranked by how many in-vocabulary bottles they actually contain, since a
+wine-shop shelf gives the model nothing to be right about.
+
 ## Layout
 
 ```
