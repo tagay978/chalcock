@@ -15,6 +15,8 @@ import io
 import os
 import sys
 
+from collections import OrderedDict
+
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +38,76 @@ DECLINED = (100, 116, 139)
 
 app = FastAPI(title="Cocktail bottle detector")
 state: dict = {}
+loaded: "OrderedDict[str, dict]" = OrderedDict()   # key -> model + its metadata
+MAX_LOADED = 4        # each weights file costs GPU memory, so keep only a few resident
+
+
+def discover_models():
+    """Every checkpoint on disk, newest run first.
+
+    train.py --save-period writes weights/epochN.pt beside best.pt and last.pt, and which epoch
+    does best on real photos is not the one validation picks - so they are all worth offering.
+    """
+    runs = os.path.join(ROOT, "runs")
+    found = []
+    if not os.path.isdir(runs):
+        return found
+    for run in sorted(os.listdir(runs)):
+        wdir = os.path.join(runs, run, "weights")
+        if not os.path.isdir(wdir):
+            continue
+        tags = []
+        for fn in os.listdir(wdir):
+            if not fn.endswith(".pt"):
+                continue
+            tag = fn[:-3]
+            order = (0 if tag == "best" else 1 if tag == "last" else 2,
+                     int(tag[5:]) if tag.startswith("epoch") and tag[5:].isdigit() else 0)
+            tags.append((order, tag, os.path.join(wdir, fn)))
+        for _, tag, path in sorted(tags):
+            found.append({"key": f"{run}/{tag}", "run": run, "tag": tag, "path": path})
+    return found
+
+
+def describe(yolo):
+    """Class count, whether the classes are ingredients, and the confidence that suits it.
+
+    Confidence does not transfer between models: 113 classes split the softmax far more finely
+    than 52, so the same cut means something different. Measured best operating points on the
+    real-world set were 0.02-0.25 for the 50-class brand model, 0.05 for the 113-class one and
+    0.4 for the ingredient-level one.
+    """
+    classes = set(yolo.names.values())
+    ingredient = len(classes & state["rules"]._ingredients) > len(classes) / 2
+    return {
+        "classes": len(classes),
+        "ingredient_level": ingredient,
+        "abstains": R.ABSTAIN in classes,
+        "default_conf": 0.4 if ingredient else 0.25 if len(classes) <= 60 else 0.05,
+    }
+
+
+def get_model(key: str):
+    """Load a checkpoint on demand and keep the last few resident."""
+    if key in loaded:
+        loaded.move_to_end(key)
+        return loaded[key]
+    entry = next((m for m in discover_models() if m["key"] == key), None)
+    if entry is None:
+        return None
+
+    from ultralytics import YOLO
+
+    yolo = YOLO(entry["path"])
+    meta = {"yolo": yolo, **entry, **describe(yolo)}
+    loaded[key] = meta
+    while len(loaded) > MAX_LOADED:
+        dropped, _ = loaded.popitem(last=False)
+        print(f"unloaded {dropped}")
+    print(f"loaded {key}: {meta['classes']} "
+          f"{'ingredient' if meta['ingredient_level'] else 'brand'} classes, "
+          f"default conf {meta['default_conf']}")
+    return meta
 
 
 def load_models(weights: str, coco_weights: str):
@@ -43,27 +115,19 @@ def load_models(weights: str, coco_weights: str):
 
     if not os.path.exists(weights):
         raise SystemExit(f"weights not found: {weights}")
-    state["brand"] = YOLO(weights)
     state["coco"] = YOLO(coco_weights)
     state["rules"] = R.Rules()
     state["recipes"] = R.json.load(
         open(os.path.join(ROOT, "data", "iba_cocktails.json"), encoding="utf-8"))["cocktails"]
-    state["abstains"] = R.ABSTAIN in state["brand"].names.values()
-    # Confidence does not transfer between models. Measured best operating points on the
-    # real-world set: 0.02-0.25 for the 50-class brand model, 0.05 for the 113-class one, and
-    # 0.4 for the ingredient-level model, which stays correct as the threshold rises where the
-    # brand models fall apart.
-    classes = set(state["brand"].names.values())
-    state["ingredient_level"] = len(classes & state["rules"]._ingredients) > len(classes) / 2
-    state["default_conf"] = (0.4 if state["ingredient_level"]
-                             else 0.25 if len(classes) <= 60 else 0.05)
     state["photos"] = load_photo_credits()
+
+    rel = os.path.relpath(weights, os.path.join(ROOT, "runs")).replace("\\", "/")
+    parts = rel.split("/")
+    state["default_key"] = f"{parts[0]}/{os.path.splitext(parts[-1])[0]}"
     print(f"cocktail photos: {len(state['photos'])}")
-    print(f"brand model: {os.path.relpath(weights, ROOT)} "
-          f"({len(state['brand'].names)} "
-          f"{'ingredient' if state['ingredient_level'] else 'brand'} classes, "
-          f"default conf {state['default_conf']}, "
-          f"{'can abstain' if state['abstains'] else 'no abstain class'})")
+    print(f"checkpoints available: {len(discover_models())}")
+    if get_model(state["default_key"]) is None:
+        raise SystemExit(f"could not load {state['default_key']}")
 
 
 def load_photo_credits():
@@ -96,14 +160,14 @@ def font(size):
     return ImageFont.load_default()
 
 
-def analyse(image: Image.Image, conf: float, two_stage: bool = True):
+def analyse(image: Image.Image, conf: float, two_stage: bool = True, model=None):
     """Name the bottles in a photo and draw the result.
 
     One stage runs the detector straight at the photo, which is the honest end-to-end path.
     Two stage lets a COCO detector propose bottles first and runs the brand model on each crop,
     which recovers bottles that are too small at shelf scale for the detector to fire on.
     """
-    brand, coco, rules = state["brand"], state["coco"], state["rules"]
+    brand, coco, rules = model["yolo"], state["coco"], state["rules"]
     W, H = image.size
 
     if not two_stage:
@@ -205,16 +269,34 @@ def match_cocktails(classes, loose: bool):
 
 @app.get("/")
 def index():
-    return FileResponse(os.path.join(STATIC, "index.html"))
+    # The page is edited while the server runs; a cached copy hides the change and looks like
+    # a broken feature.
+    return FileResponse(os.path.join(STATIC, "index.html"),
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/info")
 def info():
-    rules = state["rules"]
-    return {"classes": len(state["brand"].names), "abstains": state["abstains"],
-            "recipes": len(state["recipes"]), "bottles": len(rules.bottles),
-            "default_conf": state["default_conf"],
-            "level": "ingredient" if state["ingredient_level"] else "brand"}
+    meta = loaded[state["default_key"]]
+    return {"classes": meta["classes"], "abstains": meta["abstains"],
+            "recipes": len(state["recipes"]), "bottles": len(state["rules"].bottles),
+            "default_conf": meta["default_conf"], "model": state["default_key"],
+            "level": "ingredient" if meta["ingredient_level"] else "brand"}
+
+
+@app.get("/api/models")
+def models():
+    """Every checkpoint that can be selected, with what is already known about it."""
+    out = []
+    for m in discover_models():
+        known = loaded.get(m["key"])
+        out.append({"key": m["key"], "run": m["run"], "tag": m["tag"],
+                    "loaded": known is not None,
+                    "classes": known["classes"] if known else None,
+                    "level": ("ingredient" if known["ingredient_level"] else "brand")
+                             if known else None,
+                    "default_conf": known["default_conf"] if known else None})
+    return {"models": out, "current": state["default_key"]}
 
 
 @app.get("/api/samples")
@@ -237,7 +319,11 @@ def sample(name: str):
 
 @app.post("/api/detect")
 async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = False,
-                 two_stage: bool = True):
+                 two_stage: bool = True, model: str = ""):
+    meta = get_model(model or state["default_key"])
+    if meta is None:
+        return JSONResponse({"error": f"no such checkpoint: {model}"}, status_code=400)
+
     raw = await file.read()
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
@@ -247,7 +333,8 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
     if max(image.size) > 1600:            # keep inference and the response payload sane
         image.thumbnail((1600, 1600))
 
-    canvas, detected, declined, total = analyse(image, conf or state["default_conf"], two_stage)
+    canvas, detected, declined, total = analyse(image, conf or meta["default_conf"],
+                                               two_stage, meta)
     classes = [d["cls"] for d in detected]
     have, makeable, nearly = match_cocktails(classes, loose)
 
@@ -272,7 +359,11 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
         "named": len(detected),
         "declined": declined,
         "two_stage": two_stage,
-        "abstains": state["abstains"],
+        "model": meta["key"],
+        "classes": meta["classes"],
+        "level": "ingredient" if meta["ingredient_level"] else "brand",
+        "default_conf": meta["default_conf"],
+        "abstains": meta["abstains"],
         "bottles": bottles,
         "ingredients": sorted(have),
         "makeable": makeable,
