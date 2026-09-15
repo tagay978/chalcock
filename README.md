@@ -172,11 +172,27 @@ Three rules make the set measure what it needs to:
    only way to measure how often the model puts a brand name on a bottle it has never seen.
 3. Delete boxes that are not bottles; add bottles the proposer missed.
 
-`labelImg` works for this (`pip install labelImg`, open the `images/` folder, set the save dir to
-`labels/`, switch the format to YOLO, and point the predefined-class list at the 51 names from
-`testset/data.yaml`). Version 1.8.6 crashes on modern PyQt5 because it passes float coordinates
-to `drawRect`/`drawLine`; casting those to `int` in `libs/canvas.py` fixes it. Roboflow also
-imports the folder as-is if you would rather annotate in a browser.
+Annotate with:
+
+```bash
+pip install labelImg
+python scripts/annotate.py
+```
+
+`annotate.py` opens labelImg with both directories already selected, and works around two
+failures that are silent in a conda install:
+
+- Qt cannot load `qjpeg.dll` unless `<prefix>/Library/bin` is on PATH, because that is where its
+  libjpeg lives. Nothing reports an error — JPEG just vanishes from the supported formats, so
+  `Open Dir` scans the folder, matches none of the 56 `.jpg` files, and shows an empty list.
+- labelImg 1.8.6 passes float coordinates to `QPainter.drawRect`/`drawLine`, which modern PyQt5
+  rejects, so the canvas raises as soon as you drag a box. Cast them to `int` in
+  `libs/canvas.py`; `annotate.py` checks and tells you if the copy is unpatched.
+
+**Set the format button in the left toolbar to YOLO before saving.** labelImg loads `.txt`
+regardless of format but saves PascalVOC XML by default, which would leave the work out of the
+`.txt` files entirely. Roboflow imports the folder as-is if you would rather annotate in a
+browser.
 
 Then:
 
