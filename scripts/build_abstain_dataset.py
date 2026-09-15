@@ -12,6 +12,20 @@ apparent size instead of by label - it would learn "small bottle means unknown" 
 straight into inference. Cropping each negative bottle to fill the frame removes the shortcut and
 matches how --two-stage queries the model at inference time.
 
+**Where negatives come from decides whether this works at all.** The first attempt drew them
+from harvested web photos while every positive came from the 2023 Roboflow set, and the model
+learned to tell the two apart by image source rather than by bottle: on original-domain
+close-ups it named a brand 95.8% of the time and abstained zero times in 120 images, while on
+real-world crops it abstained constantly. Fixing scale was not enough, because source remained
+perfectly predictive.
+
+`--source-domain original` (the default) instead mines bottles that are already in the original
+photos and were never annotated - roughly 1,300 of them, same camera, same sessions, same
+compression as the positives, so the only thing separating the classes is the bottle. The risk
+moves rather than disappearing: an unlabelled bottle may still be one of the 50 that simply was
+not in that brand's export, so `--exclude-recognised` can drop crops a trained model already
+names confidently.
+
 Test-set images are excluded by filename, otherwise the evaluation measures memorisation.
 
 Run:  python scripts/build_abstain_dataset.py
@@ -37,6 +51,16 @@ COCO_BOTTLE = 39
 PAD = 0.15
 
 
+def overlap(a, b):
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    iw, ih = min(ax2, bx2) - max(ax1, bx1), min(ay2, by2) - max(ay1, by1)
+    if iw <= 0 or ih <= 0:
+        return 0.0
+    inter = iw * ih
+    return inter / ((ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - inter)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
@@ -46,6 +70,12 @@ def main():
     ap.add_argument("--min-crop", type=int, default=48, help="reject crops smaller than this")
     ap.add_argument("--scenes", action="store_true",
                     help="also add whole shelf photos; off by default to avoid a size shortcut")
+    ap.add_argument("--source-domain", choices=["harvested", "original"], default="original",
+                    help="where negatives come from; see the note in this file's docstring")
+    ap.add_argument("--exclude-recognised", default="",
+                    help="weights whose confident predictions disqualify an original-photo crop, "
+                         "since an unlabelled bottle may still be one of the 50")
+    ap.add_argument("--exclude-conf", type=float, default=0.6)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -74,35 +104,63 @@ def main():
         counts[split] = len(os.listdir(os.path.join(OUT, split, "images")))
     print("copied positives:", counts)
 
-    held_out = {os.path.splitext(f)[0] for f in os.listdir(TESTSET)} if os.path.isdir(TESTSET) else set()
-    pool = [f for f in sorted(os.listdir(HARVEST))
-            if f.lower().endswith((".jpg", ".jpeg", ".png"))
-            and os.path.splitext(f)[0] not in held_out]
-    print(f"negative source: {len(pool)} harvested photos "
-          f"({len(held_out)} test-set images excluded)")
-    if not pool:
-        raise SystemExit("no harvested images available - run scripts/harvest_images.py")
-
     from ultralytics import YOLO
 
     model = YOLO(args.model)
+    judge = YOLO(args.exclude_recognised) if args.exclude_recognised else None
+
+    if args.source_domain == "original":
+        pool = []
+        for split in ("train", "valid"):
+            idir = os.path.join(SRC_DATA, split, "images")
+            for f in sorted(os.listdir(idir)):
+                pool.append((os.path.join(idir, f),
+                             os.path.join(SRC_DATA, split, "labels",
+                                          os.path.splitext(f)[0] + ".txt")))
+        print(f"negative source: {len(pool)} original photos, mining their unannotated bottles")
+    else:
+        held_out = ({os.path.splitext(f)[0] for f in os.listdir(TESTSET)}
+                    if os.path.isdir(TESTSET) else set())
+        pool = [(os.path.join(HARVEST, f), None) for f in sorted(os.listdir(HARVEST))
+                if f.lower().endswith((".jpg", ".jpeg", ".png"))
+                and os.path.splitext(f)[0] not in held_out]
+        print(f"negative source: {len(pool)} harvested photos "
+              f"({len(held_out)} test-set images excluded)")
+    if not pool:
+        raise SystemExit("no negative source images available")
+
     rng = random.Random(args.seed)
     made = {"train": 0, "valid": 0}
     scenes = {"train": 0, "valid": 0}
+    dropped_recognised = 0
 
     for i in range(0, len(pool), 16):
         if sum(made.values()) >= args.max_negatives:
             break
         batch = pool[i:i + 16]
-        paths = [os.path.join(HARVEST, f) for f in batch]
-        for fn, result in zip(batch, model.predict(paths, conf=args.conf, verbose=False)):
+        paths = [p for p, _ in batch]
+        for (path, label_path), result in zip(batch, model.predict(paths, conf=args.conf,
+                                                                   verbose=False)):
             if sum(made.values()) >= args.max_negatives:
                 break
+            fn = os.path.basename(path)
             stem = os.path.splitext(fn)[0]
-            image = Image.open(os.path.join(HARVEST, fn)).convert("RGB")
+            image = Image.open(path).convert("RGB")
             W, H = image.size
             boxes = [xyxy for cls, xyxy in zip(result.boxes.cls.tolist(), result.boxes.xyxy.tolist())
                      if int(cls) == COCO_BOTTLE]
+
+            if label_path:
+                # Keep only bottles nobody annotated: those are the out-of-vocabulary ones.
+                gt = []
+                if os.path.exists(label_path):
+                    for line in open(label_path, encoding="utf-8"):
+                        p = line.split()
+                        if len(p) >= 5:
+                            x, y, w, h = (float(v) for v in p[1:5])
+                            gt.append(((x - w / 2) * W, (y - h / 2) * H,
+                                       (x + w / 2) * W, (y + h / 2) * H))
+                boxes = [b for b in boxes if not any(overlap(b, g) >= 0.35 for g in gt)]
 
             for j, (x1, y1, x2, y2) in enumerate(boxes):
                 if sum(made.values()) >= args.max_negatives:
@@ -112,8 +170,15 @@ def main():
                        min(W, int(x2 + px)), min(H, int(y2 + py)))
                 if box[2] - box[0] < args.min_crop or box[3] - box[1] < args.min_crop:
                     continue
-                split = "valid" if rng.random() < args.valid_frac else "train"
                 crop = image.crop(box)
+                if judge is not None:
+                    probe = judge.predict(crop.resize((640, 640)), conf=args.exclude_conf,
+                                          verbose=False)[0]
+                    if len(probe.boxes) and probe.names[
+                            int(probe.boxes.cls[probe.boxes.conf.argmax()])] != UNKNOWN:
+                        dropped_recognised += 1
+                        continue
+                split = "valid" if rng.random() < args.valid_frac else "train"
                 name = f"neg_{stem}_{j:02d}"
                 crop.save(os.path.join(OUT, split, "images", name + ".jpg"), quality=92)
                 # The bottle fills the crop by construction, minus the padding.
@@ -130,8 +195,7 @@ def main():
 
             if args.scenes and boxes:
                 split = "valid" if rng.random() < args.valid_frac else "train"
-                shutil.copy2(os.path.join(HARVEST, fn),
-                             os.path.join(OUT, split, "images", "scene_" + fn))
+                shutil.copy2(path, os.path.join(OUT, split, "images", "scene_" + fn))
                 with open(os.path.join(OUT, split, "labels", "scene_" + stem + ".txt"), "w",
                           encoding="utf-8") as fh:
                     for x1, y1, x2, y2 in boxes:
@@ -154,8 +218,19 @@ def main():
     print(f"  {len(names)} classes, '{UNKNOWN}' is id {unknown_id}")
     print(f"  positives {total_pos}, negatives {total_neg} "
           f"({100 * total_neg / (total_pos + total_neg):.0f}% of images)")
-    print("\nNegative labels are assumed, not verified: a harvested bottle that happens to be")
-    print("one of the 50 is being taught as 'unknown'. Measured base rate for that is ~10%.")
+    print(f"  negatives drawn from the {args.source_domain} domain")
+    if dropped_recognised:
+        print(f"  {dropped_recognised} crops dropped as already-recognised brands")
+    if args.source_domain == "harvested":
+        print("\nThese negatives share no image source with the positives, which let an earlier")
+        print("run separate the two by domain rather than by bottle: 95.8% named on original")
+        print("close-ups with zero abstentions, near-total abstention on real photos. Prefer")
+        print("--source-domain original unless you know why you want these.")
+    else:
+        print("\nNegative labels are inferred, not verified: an unannotated bottle may still be")
+        print("one of the 50 that was simply missing from that brand's export.")
+        if not args.exclude_recognised:
+            print("Pass --exclude-recognised <weights> to drop the ones a model already names.")
 
 
 if __name__ == "__main__":

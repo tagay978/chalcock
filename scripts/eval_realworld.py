@@ -232,7 +232,10 @@ def main():
     from ultralytics import YOLO
 
     brand = YOLO(args.weights)
-    trained = set(brand.names.values())
+    # The abstain class is an output, not a brand. A model that can predict unknown_bottle must
+    # still have every unknown_bottle annotation counted on the out-of-vocabulary side, or the
+    # two sets swap and adding the class looks like it made 229 bottles suddenly recognisable.
+    trained = set(brand.names.values()) - {UNKNOWN}
 
     truth = load_truth(names, trained)
     total_known = sum(len(k) for k, _ in truth.values())

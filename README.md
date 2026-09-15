@@ -141,6 +141,52 @@ Because the model cannot abstain, every one of those 229 is a chance to invent a
 and 7.4% of them take it at conf 0.25. That is what makes the recommender propose cocktails from
 bottles that are not on the shelf.
 
+## Experiment: teaching the model to abstain — and why it failed
+
+90% of the bottles in the test set are outside the 50, and the detector has no way to say so, so
+it names one anyway. The fix looked obvious: add an `unknown_bottle` class and train it on
+out-of-vocabulary bottles. `scripts/build_abstain_dataset.py` did that with 1,200 negative crops
+from harvested photos, cropped close so the model could not separate the classes by apparent
+size. 200 epochs, 51 classes, and the class itself trained cleanly (P 1.00 / R 0.967 on
+validation).
+
+On the real test set it made almost everything worse. Two-stage, conf 0.25, ingredient level:
+
+| | 50-class | 51-class with abstain |
+| --- | --- | --- |
+| found | 7/26 (26.9%) | 12/26 (46.2%) |
+| found and named right | **5/26 (19.2%)** | **1/26 (3.8%)** |
+| naming accuracy when found | **71.4%** | **8.3%** |
+| false alarms on unknown bottles | **7.4%** | **14.4%** |
+| precision of brand names | 19.2% | 2.4% |
+
+False alarms *doubled* — the one number the change was aimed at. Raising the threshold did not
+recover it: 3.8% named right at every confidence from 0.25 to 0.6.
+
+**The diagnosis.** Every positive came from the 2023 Roboflow set and every negative from
+harvested web photos, so the two classes differed in image source as reliably as in content, and
+source is the easier cue. Running the model over both domains shows it plainly:
+
+| | named a brand | abstained |
+| --- | --- | --- |
+| original-domain close-ups (120) | 95.8% | **0** |
+| real-world crops (264) | 18.2% | 59 |
+
+Zero abstentions in 120 in-domain images. It did not learn which bottles it knows; it learned
+which photos it has seen the like of before. Cropping fixed scale and left source untouched, and
+source alone was enough to separate the classes.
+
+**The fix, which is already in the data.** The original photos contain about 1,300 bottles that
+were never annotated, because a bottle is only labelled in the export belonging to its brand.
+Same camera, same sessions, same compression as the positives — out-of-vocabulary examples that
+differ from the positives in nothing but the bottle. `--source-domain original` (now the default)
+mines those instead. The contamination risk moves rather than vanishing: an unannotated bottle
+may still be one of the 50, and `--exclude-recognised` drops the ones a trained model already
+names confidently, which on a sample removed about 9% of candidates.
+
+That retraining has not been run yet. The result above is the honest state: the first attempt at
+abstention failed, and the reason it failed is a dataset property, not a hyperparameter.
+
 ## Adding more images
 
 The training set is ~20 photos per class, all from the original 2023 collection, and its
