@@ -23,6 +23,9 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 COCO_BOTTLE = 39
+# A model trained with scripts/build_abstain_dataset.py can answer "a bottle, but not one of
+# mine". That is not an ingredient, so it never reaches the recipe matcher.
+ABSTAIN = "unknown_bottle"
 
 # Leading quantity: "30 ml", "1 dash", "2 Bar Spoons", "3/4 Bar Spoon", "1-3 slices", "6/8 pcs".
 QTY = re.compile(
@@ -101,10 +104,16 @@ def detect(image: str, weights: str, conf: float):
     if not os.path.exists(weights):
         sys.exit(f"weights not found: {weights}  (train first, or pass --weights)")
     results = YOLO(weights).predict(image, conf=conf, verbose=False)
-    found = Counter()
+    found, declined = Counter(), 0
     for r in results:
         for c in r.boxes.cls.tolist():
-            found[r.names[int(c)]] += 1
+            name = r.names[int(c)]
+            if name == ABSTAIN:
+                declined += 1
+                continue
+            found[name] += 1
+    if declined:
+        print(f"  ({declined} bottles the model declined to name)")
     return found
 
 
@@ -136,13 +145,18 @@ def detect_two_stage(image: str, weights: str, conf: float, coco_weights: str, p
             if box[2] - box[0] >= 20 and box[3] - box[1] >= 20:
                 crops.append(im.crop(box).resize((640, 640)))
 
-    found = Counter()
+    found, declined = Counter(), 0
     for i in range(0, len(crops), 32):
         for r in brand.predict(crops[i:i + 32], conf=conf, verbose=False):
-            if len(r.boxes):
-                best = int(r.boxes.cls[r.boxes.conf.argmax()])
-                found[r.names[best]] += 1
-    print(f"  ({len(crops)} bottles found, {sum(found.values())} identified as known brands)")
+            if not len(r.boxes):
+                continue
+            name = r.names[int(r.boxes.cls[r.boxes.conf.argmax()])]
+            if name == ABSTAIN:
+                declined += 1
+                continue
+            found[name] += 1
+    print(f"  ({len(crops)} bottles found, {sum(found.values())} named"
+          + (f", {declined} declined" if declined else "") + ")")
     return found
 
 

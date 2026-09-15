@@ -114,21 +114,28 @@ def predict_two_stage(coco, brand, path, conf, pad=0.15):
     return out
 
 
-def evaluate(truth, predictions, names=None):
-    """Match predictions to annotations and count the four outcomes that matter.
+def evaluate(truth, predictions, abstain_id=None):
+    """Match predictions to annotations and count the outcomes that matter.
 
     Prediction ids are the model's, ground-truth ids are the test set's; they agree because
     testset/labels/classes.txt was written from the trained class list in trained order, with
     the extra classes appended after it.
+
+    A model with an abstain class can answer "a bottle, but not one I know". On an
+    out-of-vocabulary bottle that is the right answer, not a false alarm, so it is counted
+    separately - otherwise adding the class would look like an improvement purely by making the
+    model quieter.
     """
-    stats = dict(known=0, localised=0, correct=0, unknown=0, unknown_hit=0,
-                 preds=0, matched_pred=0)
+    stats = dict(known=0, localised=0, correct=0, abstained_known=0,
+                 unknown=0, unknown_hit=0, abstained_unknown=0,
+                 preds=0, named_preds=0)
 
     for fn, (known, unknown) in truth.items():
         preds = predictions.get(fn, [])
         stats["known"] += len(known)
         stats["unknown"] += len(unknown)
         stats["preds"] += len(preds)
+        stats["named_preds"] += sum(1 for p in preds if p[0] != abstain_id)
 
         used = set()
         for gt in known:
@@ -143,9 +150,10 @@ def evaluate(truth, predictions, names=None):
             if best is not None:
                 used.add(best)
                 stats["localised"] += 1
-                stats["matched_pred"] += 1
                 if preds[best][0] == gt[0]:
                     stats["correct"] += 1
+                elif preds[best][0] == abstain_id:
+                    stats["abstained_known"] += 1
 
         for gt in unknown:
             gbox = to_xyxy(gt)
@@ -154,24 +162,31 @@ def evaluate(truth, predictions, names=None):
                     continue
                 if iou(gbox, to_xyxy(p[:5])) >= IOU_MATCH:
                     used.add(i)
-                    stats["matched_pred"] += 1
-                    stats["unknown_hit"] += 1
+                    if p[0] == abstain_id:
+                        stats["abstained_unknown"] += 1
+                    else:
+                        stats["unknown_hit"] += 1
                     break
     return stats
 
 
-def report(label, stats):
+def report(label, stats, has_abstain=False):
     k, u = stats["known"], stats["unknown"]
     pct = lambda n, d: f"{100 * n / d:5.1f}%" if d else "    - "
     print(f"\n  {label}")
-    print(f"    known bottles annotated      {k}")
+    print(f"    in-vocabulary bottles        {k}")
     print(f"      found (IoU>={IOU_MATCH})          {stats['localised']:4}  {pct(stats['localised'], k)}")
     print(f"      found AND named right      {stats['correct']:4}  {pct(stats['correct'], k)}")
     print(f"      naming accuracy when found {'':4}  {pct(stats['correct'], stats['localised'])}")
-    print(f"    unknown bottles annotated    {u}")
-    print(f"      given a known-class label  {stats['unknown_hit']:4}  {pct(stats['unknown_hit'], u)}   <- false alarms")
-    print(f"    predictions made             {stats['preds']}")
-    print(f"      precision                  {'':4}  {pct(stats['correct'], stats['preds'])}")
+    if has_abstain:
+        print(f"      abstained (found, declined) {stats['abstained_known']:3}  {pct(stats['abstained_known'], k)}")
+    print(f"    out-of-vocabulary bottles    {u}")
+    print(f"      given a brand name         {stats['unknown_hit']:4}  {pct(stats['unknown_hit'], u)}   <- false alarms")
+    if has_abstain:
+        print(f"      correctly abstained        {stats['abstained_unknown']:4}  {pct(stats['abstained_unknown'], u)}")
+    print(f"    predictions made             {stats['preds']}"
+          + (f" ({stats['named_preds']} naming a brand)" if has_abstain else ""))
+    print(f"      precision of brand names   {'':4}  {pct(stats['correct'], stats['named_preds'])}")
 
 
 def main():
@@ -215,6 +230,11 @@ def main():
         return
     coco = YOLO(args.coco_weights) if "two-stage" in args.paths else None
 
+    # A model trained with the abstain class exposes it in its own names.
+    abstain_id = next((i for i, n in brand.names.items() if n == UNKNOWN), None)
+    if abstain_id is not None:
+        print(f"  model has an abstain class ('{UNKNOWN}', id {abstain_id})")
+
     for conf in [float(c) for c in args.conf.split(",")]:
         print(f"\n=== conf {conf} ===")
         for path_name in [p.strip() for p in args.paths.split(",")]:
@@ -223,7 +243,7 @@ def main():
                 image = os.path.join(TESTSET, "images", fn)
                 preds[fn] = (predict_direct(brand, image, conf) if path_name == "direct"
                              else predict_two_stage(coco, brand, image, conf))
-            report(path_name, evaluate(truth, preds, names))
+            report(path_name, evaluate(truth, preds, abstain_id), abstain_id is not None)
 
 
 if __name__ == "__main__":
