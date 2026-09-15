@@ -28,7 +28,10 @@ TESTSET = os.path.join(ROOT, "testset", "images")
 W, H = 1280, 720
 FPS = 30
 COCO_BOTTLE = 39
-PAD = 0.15
+# Crop the bottle exactly as the COCO detector boxed it. Padding used to add 15% on
+# each side; it pulls in whatever stands next to the bottle, which on a packed shelf is
+# another bottle.
+PAD = 0.0
 
 BG = (13, 15, 20)
 PANEL = (22, 26, 34)

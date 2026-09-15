@@ -25,7 +25,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TESTSET = os.path.join(ROOT, "testset")
 COCO_BOTTLE = 39
 ABSTAIN = "unknown_bottle"
-PAD = 0.15
+# Crop the bottle exactly as the COCO detector boxed it. Padding used to add 15% on
+# each side; it pulls in whatever stands next to the bottle, which on a packed shelf is
+# another bottle.
+PAD = 0.0
 IOU_MATCH = 0.5
 
 CORRECT = (34, 197, 94)

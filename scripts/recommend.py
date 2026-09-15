@@ -164,7 +164,8 @@ def detect(image: str, weights: str, conf: float):
     return found
 
 
-def detect_two_stage(image: str, weights: str, conf: float, coco_weights: str, pad: float = 0.15):
+def detect_two_stage(image: str, weights: str, conf: float, coco_weights: str,
+                     pad: float = 0.0):
     """Find bottles with a COCO detector, then identify each crop with the brand model.
 
     The brand model was trained on close-ups: a bottle covers ~20% of the frame in training but

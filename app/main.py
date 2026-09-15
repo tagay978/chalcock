@@ -27,7 +27,10 @@ import recommend as R  # noqa: E402  - path set above
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 COCO_BOTTLE = 39
-PAD = 0.15
+# Crop the bottle exactly as the COCO detector boxed it. Padding used to add 15% on
+# each side; it pulls in whatever stands next to the bottle, which on a packed shelf is
+# another bottle.
+PAD = 0.0
 NAMED = (34, 197, 94)
 DECLINED = (100, 116, 139)
 

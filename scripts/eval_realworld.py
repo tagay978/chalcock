@@ -130,7 +130,7 @@ def predict_direct(model, path, conf):
     return out
 
 
-def predict_two_stage(coco, brand, path, conf, pad=0.15):
+def predict_two_stage(coco, brand, path, conf, pad=0.0):
     from PIL import Image
 
     im = Image.open(path).convert("RGB")
