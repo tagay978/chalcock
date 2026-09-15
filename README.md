@@ -5,7 +5,53 @@ matched against a cocktail database to recommend drinks that are actually makeab
 
 This repository holds the detector: the dataset merge and the YOLO training.
 
-## The dataset problem this fixes
+## The dataset
+
+`ouo_final/` is the working collection: 122 brand folders under 21 spirit categories, laid out
+`category/brand/<image>.jpg` + `<image>.txt` with a `classes.txt` beside them. It is **not
+tracked** — 828 MB against a repo already near 700 MB, and its provenance is the same unresolved
+2023 collection described below. `scripts/build_dataset_ouo.py` rebuilds `dataset_v2/` from it.
+
+| | old `dataset/` | merged `dataset_v2/` |
+| --- | --- | --- |
+| photos | 1,494 | **3,417** |
+| boxes | 1,593 | **13,080** |
+| classes | 50 | **119** |
+
+Merging the two is mostly deduplication. MD5 finds **zero** overlap, because the old set came
+through Roboflow's re-encoding while ouo_final holds the originals; pHash finds that **93% of the
+old images are already there**. The old set contributes 172 genuinely new photos, and they are
+kept because they still carry annotation work.
+
+Four things the layout needed handling for:
+
+1. **`classes.txt` is per folder and there are three different ones** (113, 5 and 5 names), so the
+   same label id means different bottles in different folders and the mapping has to be read
+   locally rather than globally.
+2. **34 `.txt` files are JPEGs** saved with the wrong extension, plus empty labels and 122 images
+   with no label at all — all skipped.
+3. **`calvados/1`** has a folder and a class both literally named `1`; numeric class names fall
+   back to the category.
+4. **Spelling drift between the two sets.** `camusvsop` against `camus_vsop` would have become two
+   classes for one bottle. Ignoring punctuation lines up 47 of the old 50; three needed a human:
+   `grandmanier` → `grandmarnier` (the old export's typo), `orangebitters` → `orange`,
+   `wildturkeykrye` → `wildturkey`.
+
+Splitting also needed care: a class with 7 boxes can land entirely in validation, leaving nothing
+to train on, so train and valid each take one photo of every class before the fractions apply.
+`calvados` exists in a single source photo and so appears only in train.
+
+The 21 category folders are a free gift — they say what each brand pours, so
+`dataset_v2/class_ingredients.yaml` is generated rather than hand-written. The old 50-class
+mapping in `data/bottles.yaml` was typed by hand; the 119-class one is not.
+
+Two practical notes. ouo_final holds camera originals up to 3024x4032 where the old set was
+uniformly 640x640, so `--max-side` caps the long edge at 1280 on copy (training resizes to 640
+regardless) and `--cache` is off by default: caching 8 GB of decoded originals overflows
+ultralytics' 32-bit offset buffer and fails with "negative dimensions are not allowed".
+
+## The dataset problem the first merge fixed
+
 
 `finalloopy/` contains **50 separate Roboflow exports, one per bottle**. Each was annotated on
 its own, which means a single shelf photo showing three bottles was uploaded to three different

@@ -23,3 +23,10 @@ dataset_abstain/
 
 # Rendered prediction samples — regenerate with: python scripts/show_predictions.py
 samples/
+
+# Merged ouo_final dataset — rebuild with: python scripts/build_dataset_ouo.py
+dataset_v2/
+
+# Source collection for dataset_v2 (828 MB) — kept local, not tracked.
+# See README: the repo is already ~700 MB and provenance is unresolved.
+ouo_final/
