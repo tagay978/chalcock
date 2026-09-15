@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections import Counter
 
 import yaml
 
@@ -45,9 +46,14 @@ def iou(a, b):
     return inter / ((ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - inter)
 
 
-def load_truth(names):
-    """Read the annotations, split per image into known-class and unknown-class boxes."""
-    unknown_id = names.index(UNKNOWN)
+def load_truth(names, trained):
+    """Read the annotations, split per image into in-vocabulary and out-of-vocabulary boxes.
+
+    Out-of-vocabulary is wider than the `unknown_bottle` proposal class: an annotator who
+    recognises a bottle the model was never trained on (Campari, Jack Daniel's) may well name it,
+    and counting those as missed detections would punish the model for lacking an output it
+    never had. Anything the model cannot emit belongs on the open-set side.
+    """
     truth = {}
     ldir = os.path.join(TESTSET, "labels")
     for fn in sorted(os.listdir(os.path.join(TESTSET, "images"))):
@@ -61,7 +67,8 @@ def load_truth(names):
                     continue
                 cid = int(parts[0])
                 box = (cid, *(float(v) for v in parts[1:5]))
-                (unknown if cid == unknown_id else known).append(box)
+                in_vocab = cid < len(names) and names[cid] in trained
+                (known if in_vocab else unknown).append(box)
         truth[fn] = (known, unknown)
     return truth
 
@@ -107,9 +114,13 @@ def predict_two_stage(coco, brand, path, conf, pad=0.15):
     return out
 
 
-def evaluate(truth, predictions, names):
-    """Match predictions to annotations and count the four outcomes that matter."""
-    unknown_id = names.index(UNKNOWN)
+def evaluate(truth, predictions, names=None):
+    """Match predictions to annotations and count the four outcomes that matter.
+
+    Prediction ids are the model's, ground-truth ids are the test set's; they agree because
+    testset/labels/classes.txt was written from the trained class list in trained order, with
+    the extra classes appended after it.
+    """
     stats = dict(known=0, localised=0, correct=0, unknown=0, unknown_hit=0,
                  preds=0, matched_pred=0)
 
@@ -139,7 +150,7 @@ def evaluate(truth, predictions, names):
         for gt in unknown:
             gbox = to_xyxy(gt)
             for i, p in enumerate(preds):
-                if i in used or p[0] == unknown_id:
+                if i in used:
                     continue
                 if iou(gbox, to_xyxy(p[:5])) >= IOU_MATCH:
                     used.add(i)
@@ -175,19 +186,33 @@ def main():
         raise SystemExit(f"{TESTSET} not found - run scripts/prepare_testset.py first")
 
     names = yaml.safe_load(open(os.path.join(TESTSET, "data.yaml"), encoding="utf-8"))["names"]
-    truth = load_truth(names)
-    total_known = sum(len(k) for k, _ in truth.values())
-    total_unknown = sum(len(u) for _, u in truth.values())
-    print(f"test set: {len(truth)} photos, {total_known} known-class bottles, "
-          f"{total_unknown} unknown bottles")
-    if total_known == 0:
-        print("\nEvery box is still 'unknown_bottle' - the set has not been annotated yet.")
-        print("Relabel the bottles you recognise, then re-run.")
-        return
 
     from ultralytics import YOLO
 
     brand = YOLO(args.weights)
+    trained = set(brand.names.values())
+
+    truth = load_truth(names, trained)
+    total_known = sum(len(k) for k, _ in truth.values())
+    total_unknown = sum(len(u) for _, u in truth.values())
+    print(f"test set: {len(truth)} photos, {total_known} in-vocabulary bottles, "
+          f"{total_unknown} out-of-vocabulary")
+
+    # Bottles the annotator named that the model has no output for: the concrete shortlist of
+    # classes worth adding.
+    named_oov = Counter()
+    for _, unknown in truth.values():
+        for gt in unknown:
+            label = names[gt[0]] if gt[0] < len(names) else str(gt[0])
+            if label != UNKNOWN:
+                named_oov[label] += 1
+    if named_oov:
+        print("  named but not a trained class: "
+              + ", ".join(f"{k} x{v}" for k, v in named_oov.most_common()))
+
+    if total_known == 0:
+        print("\nNo in-vocabulary bottles annotated - nothing to measure.")
+        return
     coco = YOLO(args.coco_weights) if "two-stage" in args.paths else None
 
     for conf in [float(c) for c in args.conf.split(",")]:

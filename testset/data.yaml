@@ -1,7 +1,7 @@
 path: C:/Users/서동준/git/testset
 train: images
 val: images
-nc: 51
+nc: 56
 names:
 - bombay
 - buffalotrace
@@ -54,3 +54,8 @@ names:
 - wildturkeykrye
 - wyborowa
 - unknown_bottle
+- beefeater
+- gilbeygin
+- aperol
+- jackdaniel
+- campari

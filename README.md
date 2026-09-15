@@ -97,9 +97,28 @@ memorisation of those sessions, not detection of a bottle in the wild. Weakest t
 `extradry` (0.533), `gordons` (0.720) and the near-identical pairs the label set contains —
 `johnbarrfinest`/`johnbarrreserve` (0.724/0.746), `camusvsop` (0.745).
 
-Run against 34 real bar photos harvested from Commons and Openverse, the same weights produce
-**2 detections at conf 0.5, and 4 at conf 0.25** — across photos containing several hundred
-bottles. The cause is scale:
+Measured against the hand-annotated test set (27 photos, 255 boxes, of which **26 are bottles the
+model was actually trained on** and 229 are not), the same weights give:
+
+| conf | path | found | found + named right | naming accuracy | precision | false alarms on unknown |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.25 | direct | 2/26 (7.7%) | 2 (7.7%) | 100% | 40% | 0.9% |
+| 0.25 | two-stage | 7/26 (26.9%) | 2 (7.7%) | 28.6% | 7.7% | 7.4% |
+| 0.5 | direct | 2/26 (7.7%) | 2 (7.7%) | 100% | 66.7% | 0.4% |
+| 0.5 | two-stage | 3/26 (11.5%) | 1 (3.8%) | 33.3% | 10% | 3.1% |
+| 0.7 | two-stage | 1/26 (3.8%) | **0** | 0% | 0% | 0.4% |
+
+Two things to take from this. **Real-world identification tops out at 2 of 26 bottles** against a
+test mAP of 0.95. And **raising the threshold makes it worse, not safer** — by conf 0.7 nothing
+correct survives, so the model's confidence is anti-correlated with being right and no operating
+point trades recall for precision. Two-stage roughly quadruples localisation (7 vs 2) but naming
+accuracy collapses from 100% to 28.6%, because the extra crops it feeds the model are the hard
+ones, and the model guesses rather than abstaining.
+
+Note the sample is small — 26 in-vocabulary bottles — so these rates carry wide intervals. They
+are clear enough to act on and too thin to rank fixes by.
+
+The cause of the localisation failure is scale:
 
 | | training set | real shelf photos |
 | --- | --- | --- |
@@ -110,17 +129,17 @@ Three quarters of real-world bottles are smaller than 95% of the training bottle
 trained on close-ups and never sees a bottle at shelf scale.
 
 `recommend.py --two-stage` works around this by detecting bottles with a COCO-pretrained model
-and running the brand model on each crop, which puts the subject back at the trained scale. That
-raises attempts roughly fourfold, **but the identifications are mostly wrong**: on a photo of six
-Johnnie Walker bottles it returned two "Camus XO" (a cognac), one "Johnnie Walker Red" for a Gold
-Label, and one correct Black Label.
+and running the brand model on each crop, which puts the subject back at the trained scale.
 
 The deeper problem is that there is no way to answer "none of these". Every crop is forced into
-one of 50 classes, and a real bar is full of bottles outside that vocabulary — the photo above
-contains Gold Label, Green Label and Explorers' Club, none of which are classes. Before the
-accuracy numbers mean anything the model needs either a background/unknown class or a rejection
-threshold calibrated on out-of-vocabulary bottles, and a hand-annotated real-world test set to
-measure against.
+one of 50 classes, and the annotation confirms how badly that bites: **229 of the 255 annotated
+bottles (90%) are outside the vocabulary**. The annotator could even name several of them —
+Beefeater, Gilbey's Gin, Aperol, Jack Daniel's, Campari — which is a concrete shortlist of
+classes worth adding, and a reminder that a real bar simply is not made of these 50 bottles.
+
+Because the model cannot abstain, every one of those 229 is a chance to invent an ingredient,
+and 7.4% of them take it at conf 0.25. That is what makes the recommender propose cocktails from
+bottles that are not on the shelf.
 
 ## Adding more images
 

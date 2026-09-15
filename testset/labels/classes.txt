@@ -49,3 +49,8 @@ triplesec
 wildturkeykrye
 wyborowa
 unknown_bottle
+beefeater
+gilbeygin
+aperol
+jackdaniel
+campari
