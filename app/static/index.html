@@ -73,16 +73,59 @@
   .bottle em { color: var(--muted); font-style: normal; font-size: 12px; }
   .conf { color: var(--green); font-variant-numeric: tabular-nums; font-size: 13px; }
 
-  .cocktail { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
-              margin-bottom: 10px; background: var(--panel-2); }
-  .cocktail h3 { margin: 0 0 4px; font-size: 16px; }
-  .cocktail h3 a { color: inherit; text-decoration: none; }
-  .cocktail h3 a:hover { color: var(--accent); }
+  .cocktail {
+    display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px;
+    margin-bottom: 9px; background: var(--panel-2); color: inherit;
+    font: inherit; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .cocktail:hover { border-color: var(--accent); background: #212734; }
+  .cocktail .thumb {
+    width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: 0 0 auto;
+    background: var(--panel);
+  }
+  .cocktail .thumb.ph {
+    display: grid; place-items: center; color: var(--accent-dim); font-size: 19px;
+  }
+  .cocktail .body { flex: 1 1 auto; min-width: 0; }
+  .cocktail .nm { font-size: 15px; font-weight: 600; }
+  .cocktail .ing { font-size: 12px; color: var(--muted); overflow: hidden;
+                   text-overflow: ellipsis; white-space: nowrap; }
+  .cocktail .go { color: var(--muted); font-size: 18px; flex: 0 0 auto; }
   .cat { font-size: 11px; color: var(--accent-dim); text-transform: uppercase; letter-spacing: .6px; }
-  .cocktail ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
-  .cocktail .method { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
-  .miss { font-size: 12px; color: #ef8a8a; margin-top: 6px; }
-  .sub-note { font-size: 12px; color: var(--accent-dim); margin-top: 6px; }
+  .miss { font-size: 12px; color: #ef8a8a; }
+  .sub-note { font-size: 12px; color: var(--accent-dim); }
+
+  /* detail modal */
+  #modal {
+    position: fixed; inset: 0; background: rgba(5,6,9,.78); display: none;
+    align-items: center; justify-content: center; padding: 24px; z-index: 50;
+  }
+  #modal.on { display: flex; }
+  .sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    max-width: 780px; width: 100%; max-height: 88vh; overflow: auto;
+    display: grid; grid-template-columns: 300px 1fr;
+  }
+  @media (max-width: 720px) { .sheet { grid-template-columns: 1fr; } }
+  .sheet img.hero { width: 100%; height: 100%; min-height: 260px; object-fit: cover;
+                    border-radius: 16px 0 0 16px; display: block; }
+  @media (max-width: 720px) { .sheet img.hero { border-radius: 16px 16px 0 0; max-height: 240px; } }
+  .sheet .noimg { display: grid; place-items: center; background: var(--panel-2);
+                  color: var(--accent-dim); font-size: 52px; border-radius: 16px 0 0 16px; }
+  .sheet .detail { padding: 24px 26px 26px; }
+  .sheet h3 { margin: 6px 0 2px; font-size: 25px; }
+  .sheet h4 { margin: 20px 0 7px; font-size: 12px; text-transform: uppercase;
+              letter-spacing: 1px; color: var(--muted); }
+  .sheet ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
+  .sheet ul li { margin-bottom: 3px; }
+  .sheet p { margin: 0; font-size: 14px; color: #c7ccd8; }
+  .credit { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line);
+            font-size: 11.5px; color: var(--muted); }
+  .credit a { color: var(--muted); }
+  .close { position: absolute; top: 18px; right: 22px; background: none; border: 0;
+           color: var(--muted); font-size: 30px; cursor: pointer; line-height: 1; }
+  .close:hover { color: var(--text); }
 
   .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
   .spin { display: none; color: var(--accent); font-size: 14px; }
@@ -104,7 +147,7 @@
   <p class="sub">사진 속 병을 검출해 브랜드를 식별하고, 보유 재료로 만들 수 있는 IBA 공식 칵테일을 추천합니다.</p>
   <div class="chips">
     <span class="chip">YOLO11 · 50 brands</span>
-    <span class="chip">COCO 2-stage detection</span>
+    <span class="chip" id="chip-stage">1-stage detection</span>
     <span class="chip" id="chip-recipes">IBA 102 cocktails</span>
     <span class="chip" id="chip-abstain">—</span>
   </div>
@@ -126,6 +169,7 @@
         <label>신뢰도 <input type="range" id="conf" min="0.05" max="0.8" step="0.05" value="0.25">
           <b id="confval">0.25</b></label>
         <label><input type="checkbox" id="loose"> 유사 재료 대체 허용</label>
+        <label><input type="checkbox" id="twostage"> 2단계 검출 (COCO 크롭)</label>
       </div>
       <div class="spin" id="spin">분석 중…</div>
     </div>
@@ -168,6 +212,8 @@
 
 </div>
 
+<div id="modal"></div>
+
 <script>
 const $ = s => document.querySelector(s);
 const drop = $('#drop'), fileInput = $('#file');
@@ -185,6 +231,11 @@ $('#conf').addEventListener('input', e => $('#confval').textContent = e.target.v
 let lastFile = null;
 $('#conf').addEventListener('change', () => lastFile && send(lastFile));
 $('#loose').addEventListener('change', () => lastFile && send(lastFile));
+$('#twostage').addEventListener('change', e => {
+  $('#chip-stage').textContent = e.target.checked
+    ? '2-stage detection (COCO crop)' : '1-stage detection';
+  if (lastFile) send(lastFile);
+});
 
 fetch('/api/info').then(r => r.json()).then(d => {
   $('#chip-recipes').textContent = `IBA ${d.recipes} cocktails`;
@@ -210,7 +261,8 @@ async function send(file) {
   $('#spin').classList.add('on');
   const fd = new FormData();
   fd.append('file', file);
-  const q = `?conf=${$('#conf').value}&loose=${$('#loose').checked}`;
+  const q = `?conf=${$('#conf').value}&loose=${$('#loose').checked}`
+          + `&two_stage=${$('#twostage').checked}`;
   try {
     const res = await fetch('/api/detect' + q, { method: 'POST', body: fd });
     const d = await res.json();
@@ -221,19 +273,72 @@ async function send(file) {
   }
 }
 
-function recipeCard(c, missing) {
-  const subs = c.subs && c.subs.length
-    ? `<div class="sub-note">대체 사용: ${c.subs.join(', ')}</div>` : '';
-  const miss = missing
-    ? `<div class="miss">필요: ${c.missing.join(', ')}</div>` : '';
-  return `<div class="cocktail">
-    <div class="cat">${c.category}</div>
-    <h3><a href="${c.url}" target="_blank" rel="noopener">${c.name}</a></h3>
-    <ul>${c.ingredients.map(i => `<li>${i}</li>`).join('')}</ul>
-    ${c.method ? `<p class="method">${c.method}</p>` : ''}
-    ${subs}${miss}
-  </div>`;
+const esc = s => String(s).replace(/[&<>"]/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+let shown = [];   // every cocktail currently listed, indexed by the button's data-i
+
+function recipeCard(c, i, missing) {
+  const thumb = c.photo
+    ? `<img class="thumb" src="${c.photo.src}" alt="" loading="lazy">`
+    : `<div class="thumb ph">🍸</div>`;
+  const note = missing
+    ? `<div class="miss">필요: ${esc(c.missing.join(', '))}</div>`
+    : (c.subs && c.subs.length
+        ? `<div class="sub-note">대체: ${esc(c.subs.join(', '))}</div>` : '');
+  const summary = note || `<div class="ing">${esc(c.ingredients.slice(0, 3).join(' · '))}</div>`;
+  return `<button class="cocktail" data-i="${i}">
+    ${thumb}
+    <div class="body">
+      <div class="cat">${esc(c.category)}</div>
+      <div class="nm">${esc(c.name)}</div>
+      ${summary}
+    </div>
+    <div class="go">›</div>
+  </button>`;
 }
+
+function openDetail(c) {
+  const hero = c.photo
+    ? `<img class="hero" src="${c.photo.src}" alt="${esc(c.name)}">`
+    : `<div class="noimg">🍸</div>`;
+  const credit = c.photo
+    ? `<div class="credit">사진: ${esc(c.photo.creator)} ·
+        <a href="${c.photo.landing_url}" target="_blank" rel="noopener">Wikimedia Commons</a> ·
+        <a href="${c.photo.license_url}" target="_blank" rel="noopener">${esc(c.photo.license)}</a>
+        <br>레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a></div>`
+    : `<div class="credit">레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a></div>`;
+
+  document.querySelector('#modal').innerHTML = `
+    <div class="sheet" style="position:relative">
+      <button class="close" aria-label="닫기">×</button>
+      ${hero}
+      <div class="detail">
+        <div class="cat">${esc(c.category)}</div>
+        <h3>${esc(c.name)}</h3>
+        ${c.missing ? `<div class="miss">없는 재료: ${esc(c.missing.join(', '))}</div>` : ''}
+        ${c.subs && c.subs.length
+          ? `<div class="sub-note">대체 사용: ${esc(c.subs.join(', '))}</div>` : ''}
+        <h4>재료</h4>
+        <ul>${c.ingredients.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+        <h4>만드는 방법</h4>
+        <p>${esc(c.method || '—')}</p>
+        ${c.garnish && c.garnish.toUpperCase() !== 'N/A'
+          ? `<h4>가니시</h4><p>${esc(c.garnish)}</p>` : ''}
+        ${credit}
+      </div>
+    </div>`;
+  document.querySelector('#modal').classList.add('on');
+}
+
+function closeDetail() { document.querySelector('#modal').classList.remove('on'); }
+
+document.addEventListener('click', e => {
+  const card = e.target.closest('.cocktail');
+  if (card) { openDetail(shown[+card.dataset.i]); return; }
+  if (e.target.closest('.close') || e.target.id === 'modal') closeDetail();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
 
 function render(d) {
   $('#shotpanel').style.display = '';
@@ -242,21 +347,25 @@ function render(d) {
     <div class="stat"><b>${d.bottles_found}</b><span>병 검출</span></div>
     <div class="stat"><b>${d.named}</b><span>브랜드 식별</span></div>
     <div class="stat"><b>${d.declined}</b><span>${d.abstains ? '기권' : '미식별'}</span></div>
-    <div class="stat"><b>${d.ingredients.length}</b><span>재료</span></div>`;
+    <div class="stat"><b>${d.ingredients.length}</b><span>재료</span></div>
+    <div class="stat"><b>${d.two_stage ? '2' : '1'}</b><span>단계 검출</span></div>`;
 
   $('#bottlepanel').style.display = d.bottles.length ? '' : 'none';
   $('#bottles').innerHTML = d.bottles.map(b =>
     `<div class="bottle"><div>${b.label}<br><em>${b.ingredient}</em></div>
      <div class="conf">${b.conf.toFixed(2)}</div></div>`).join('');
 
+  // One flat index across both lists, so a card can find its recipe by position.
+  shown = [...d.makeable, ...d.nearly];
   $('#makeable').innerHTML = d.makeable.length
-    ? d.makeable.map(c => recipeCard(c, false)).join('')
+    ? d.makeable.map((c, i) => recipeCard(c, i, false)).join('')
     : `<p class="empty">${d.bottles.length
         ? '식별된 재료로 정확히 만들 수 있는 IBA 칵테일이 없습니다. 아래 "한두 병만 더" 목록을 보세요.'
         : '병을 식별하지 못했습니다. 신뢰도를 낮춰보세요.'}</p>`;
 
   $('#nearlypanel').style.display = d.nearly.length ? '' : 'none';
-  $('#nearly').innerHTML = d.nearly.map(c => recipeCard(c, true)).join('');
+  $('#nearly').innerHTML = d.nearly
+    .map((c, i) => recipeCard(c, d.makeable.length + i, true)).join('');
 }
 </script>
 </body>

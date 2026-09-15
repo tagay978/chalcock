@@ -244,8 +244,19 @@ python app/main.py                 # http://127.0.0.1:8000
 
 It imports `scripts/recommend.py` rather than reimplementing the matching, so the demo cannot
 drift from the measured numbers, and it picks up the abstain weights automatically when they
-exist. Test-set photos are offered as one-click samples. The page states the real-world accuracy
-in its footer, because a demo that only shows its successes is a lie by omission.
+exist. Test-set photos are offered as one-click samples, clicking a cocktail opens its
+ingredients, method and a licensed photo, and the footer states the real-world accuracy, because
+a demo that only shows its successes is a lie by omission.
+
+Detection runs **single-stage** by default — the detector straight at the photo, end to end. The
+two-stage path (COCO proposes bottles, the brand model names each crop) is a checkbox, since it
+finds roughly four times as many bottles but names them far less accurately; having both in the
+UI makes that trade-off something you can show rather than assert.
+
+`scripts/fetch_cocktail_images.py` collects one CC-licensed photo per cocktail from Wikimedia
+Commons (89 of 102 have one), with attribution in `app/static/cocktails/attribution.csv`. The
+IBA's own photos are not used: the recipes are facts and fine to cite, their photography is not
+ours to redistribute.
 
 ```bash
 python scripts/make_demo_video.py --n 5      # samples/demo.mp4

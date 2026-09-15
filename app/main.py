@@ -46,9 +46,32 @@ def load_models(weights: str, coco_weights: str):
     state["recipes"] = R.json.load(
         open(os.path.join(ROOT, "data", "iba_cocktails.json"), encoding="utf-8"))["cocktails"]
     state["abstains"] = R.ABSTAIN in state["brand"].names.values()
+    state["photos"] = load_photo_credits()
+    print(f"cocktail photos: {len(state['photos'])}")
     print(f"brand model: {os.path.relpath(weights, ROOT)} "
           f"({len(state['brand'].names)} classes, "
           f"{'can abstain' if state['abstains'] else 'no abstain class'})")
+
+
+def load_photo_credits():
+    """slug -> photo path and the credit its licence requires, from fetch_cocktail_images.py."""
+    path = os.path.join(STATIC, "cocktails", "attribution.csv")
+    if not os.path.exists(path):
+        return {}
+    import csv
+
+    out = {}
+    with open(path, encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            if os.path.exists(os.path.join(STATIC, "cocktails", row["file"])):
+                out[row["slug"]] = {
+                    "src": f"/static/cocktails/{row['file']}",
+                    "creator": row.get("creator") or "unknown",
+                    "license": row.get("license") or "",
+                    "license_url": row.get("license_url") or "",
+                    "landing_url": row.get("landing_url") or "",
+                }
+    return out
 
 
 def font(size):
@@ -60,10 +83,29 @@ def font(size):
     return ImageFont.load_default()
 
 
-def analyse(image: Image.Image, conf: float):
-    """Crop every bottle COCO finds, name what we can, and draw the result."""
+def analyse(image: Image.Image, conf: float, two_stage: bool = False):
+    """Name the bottles in a photo and draw the result.
+
+    One stage runs the detector straight at the photo, which is the honest end-to-end path.
+    Two stage lets a COCO detector propose bottles first and runs the brand model on each crop,
+    which recovers bottles that are too small at shelf scale for the detector to fire on.
+    """
     brand, coco, rules = state["brand"], state["coco"], state["rules"]
     W, H = image.size
+
+    if not two_stage:
+        detected, declined, boxes = [], 0, []
+        for r in brand.predict(image, conf=conf, verbose=False):
+            for cls, score, xyxy in zip(r.boxes.cls.tolist(), r.boxes.conf.tolist(),
+                                        r.boxes.xyxy.tolist()):
+                box = tuple(int(v) for v in xyxy)
+                boxes.append(box)
+                name = r.names[int(cls)]
+                if name == R.ABSTAIN:
+                    declined += 1
+                    continue
+                detected.append({"cls": name, "conf": round(float(score), 3), "box": box})
+        return draw(image, boxes, detected, rules), detected, declined, len(boxes)
 
     crops, boxes = [], []
     for r in coco.predict(image, conf=0.25, verbose=False):
@@ -93,26 +135,29 @@ def analyse(image: Image.Image, conf: float):
                 continue
             detected.append({"cls": name, "conf": round(float(r.boxes.conf[best]), 3),
                              "box": boxes[i + j]})
+    return draw(image, boxes, detected, rules), detected, declined, len(boxes)
+
+
+def draw(image, boxes, detected, rules):
+    W = image.width
 
     canvas = image.copy()
-    draw = ImageDraw.Draw(canvas)
+    pen = ImageDraw.Draw(canvas)
     label_font = font(max(14, W // 60))
-    named_boxes = {id(d["box"]): d for d in detected}
     for box in boxes:
         hit = next((d for d in detected if d["box"] == box), None)
         if hit is None:
-            draw.rectangle(box, outline=DECLINED, width=2)
+            pen.rectangle(box, outline=DECLINED, width=2)
             continue
         label = rules.bottles.get(hit["cls"], {}).get("label", hit["cls"])
         text = f"{label} {hit['conf']:.2f}"
-        draw.rectangle(box, outline=NAMED, width=max(3, W // 300))
-        tb = draw.textbbox((0, 0), text, font=label_font)
+        pen.rectangle(box, outline=NAMED, width=max(3, W // 300))
+        tb = pen.textbbox((0, 0), text, font=label_font)
         tw, th = tb[2] - tb[0], tb[3] - tb[1]
         ty = max(0, box[1] - th - 8)
-        draw.rectangle([box[0], ty, box[0] + tw + 10, ty + th + 8], fill=NAMED)
-        draw.text((box[0] + 5, ty + 3), text, fill=(255, 255, 255), font=label_font)
-
-    return canvas, detected, declined, len(boxes)
+        pen.rectangle([box[0], ty, box[0] + tw + 10, ty + th + 8], fill=NAMED)
+        pen.text((box[0] + 5, ty + 3), text, fill=(255, 255, 255), font=label_font)
+    return canvas
 
 
 def match_cocktails(classes, loose: bool):
@@ -130,9 +175,10 @@ def match_cocktails(classes, loose: bool):
             satisfied += 1
             if src != key:
                 subs.append(f"{key} → {src}")
-        entry = {"name": c["name"], "category": c["category"],
+        entry = {"name": c["name"], "slug": c["slug"], "category": c["category"],
                  "ingredients": c["ingredients"], "method": c["method"],
-                 "garnish": c["garnish"], "url": c["url"], "subs": subs}
+                 "garnish": c["garnish"], "url": c["url"], "subs": subs,
+                 "photo": state["photos"].get(c["slug"])}
         if not missing:
             makeable.append(entry)
         elif len(missing) <= 2 and satisfied:
@@ -175,7 +221,8 @@ def sample(name: str):
 
 
 @app.post("/api/detect")
-async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool = False):
+async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool = False,
+                 two_stage: bool = False):
     raw = await file.read()
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
@@ -185,7 +232,7 @@ async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool =
     if max(image.size) > 1600:            # keep inference and the response payload sane
         image.thumbnail((1600, 1600))
 
-    canvas, detected, declined, total = analyse(image, conf)
+    canvas, detected, declined, total = analyse(image, conf, two_stage)
     classes = [d["cls"] for d in detected]
     have, makeable, nearly = match_cocktails(classes, loose)
 
@@ -208,6 +255,7 @@ async def detect(file: UploadFile = File(...), conf: float = 0.25, loose: bool =
         "bottles_found": total,
         "named": len(detected),
         "declined": declined,
+        "two_stage": two_stage,
         "abstains": state["abstains"],
         "bottles": bottles,
         "ingredients": sorted(have),

@@ -74,10 +74,23 @@ def fade(frames, image, seconds=0.4, out=False):
         frames.write(cv2.cvtColor(blended, cv2.COLOR_RGB2BGR))
 
 
-def analyse(path, brand, coco, conf):
-    """Same two-stage pass the app runs: COCO proposes, the brand model names or declines."""
+def analyse(path, brand, coco, conf, two_stage=False):
+    """Same pass the app runs. One stage is the detector end to end; two stage lets COCO
+    propose bottles first and names each crop, which finds more at shelf scale."""
     image = Image.open(path).convert("RGB")
     iw, ih = image.size
+
+    if not two_stage:
+        results = []
+        for r in brand.predict(path, conf=conf, verbose=False):
+            for cls, score, xyxy in zip(r.boxes.cls.tolist(), r.boxes.conf.tolist(),
+                                        r.boxes.xyxy.tolist()):
+                name = r.names[int(cls)]
+                box = tuple(int(v) for v in xyxy)
+                results.append((box, None, 0.0) if name == R.ABSTAIN
+                               else (box, name, float(score)))
+        return image, results
+
     crops, boxes = [], []
     for r in coco.predict(path, conf=0.25, verbose=False):
         for cls, xyxy in zip(r.boxes.cls.tolist(), r.boxes.xyxy.tolist()):
@@ -131,8 +144,8 @@ def photo_panel(image, results, revealed, rules):
     return canvas
 
 
-def segment(frames, path, brand, coco, conf, rules, recipes, index, total):
-    image, results = analyse(path, brand, coco, conf)
+def segment(frames, path, brand, coco, conf, rules, recipes, index, total, two_stage):
+    image, results = analyse(path, brand, coco, conf, two_stage)
     named = [(b, n, s) for b, n, s in results if n]
     classes = [n for _, n, _ in named]
     have = {rules.bottles[c]["ingredient"] for c in classes if c in rules.bottles}
@@ -253,6 +266,8 @@ def main():
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--conf", type=float, default=0.25)
     ap.add_argument("--n", type=int, default=5, help="how many photos to show")
+    ap.add_argument("--two-stage", action="store_true",
+                    help="let COCO propose bottles first; finds more, names them worse")
     ap.add_argument("--out", default=os.path.join(ROOT, "samples", "demo.mp4"))
     args = ap.parse_args()
 
@@ -280,7 +295,7 @@ def main():
     for i, fn in enumerate(picked, 1):
         print(f"  rendering {i}/{len(picked)}: {fn}")
         segment(frames, os.path.join(TESTSET, fn), brand, coco, args.conf, rules, recipes,
-                i, len(picked))
+                i, len(picked), args.two_stage)
 
     abstains = R.ABSTAIN in brand.names.values()
     card(frames, [
@@ -292,7 +307,8 @@ def main():
         ("어휘 밖 병 비율  90%", F_BODY, TEXT),
         ("", F_SMALL, MUTED),
         (f"모델: {os.path.basename(os.path.dirname(os.path.dirname(args.weights)))}"
-         + ("  (기권 가능)" if abstains else ""), F_SMALL, MUTED),
+         + f"  ·  {'2' if args.two_stage else '1'}단계 검출"
+         + ("  ·  기권 가능" if abstains else ""), F_SMALL, MUTED),
     ], 4.0)
 
     frames.release()
