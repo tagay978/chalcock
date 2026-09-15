@@ -9,8 +9,10 @@ Two things break labelImg in a conda install and both are silent:
 2. labelImg 1.8.6 passes float coordinates to QPainter.drawRect/drawLine, which modern PyQt5
    rejects, so the canvas raises as soon as you start drawing a box.
 
-This script fixes the PATH, checks the JPEG plugin actually loaded, reports the canvas bug if
-it is still unpatched, and opens the test set with the right directories already selected.
+The JPEG check runs in a child process on purpose: it needs a QApplication to load the plugins,
+Qt permits only one per process, and labelImg creates its own. Checking in-process would leave
+labelImg with a dead application object and it would exit with "Please instantiate the
+QApplication object first".
 
 Run:  python scripts/annotate.py
 """
@@ -18,10 +20,20 @@ from __future__ import annotations
 
 import inspect
 import os
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TESTSET = os.path.join(ROOT, "testset")
+
+PROBE = (
+    "import sys;"
+    "from PyQt5.QtWidgets import QApplication;"
+    "from PyQt5.QtGui import QImageReader;"
+    "app = QApplication(sys.argv[:1]);"
+    "fmts = sorted(f.data().decode().lower() for f in QImageReader.supportedImageFormats());"
+    "print(','.join(fmts))"
+)
 
 
 def fix_dll_path():
@@ -40,15 +52,24 @@ def fix_dll_path():
     return added
 
 
+def supported_formats():
+    """Ask a child process which image formats Qt can actually read."""
+    try:
+        out = subprocess.run([sys.executable, "-c", PROBE], capture_output=True, text=True,
+                             timeout=120, env=os.environ)
+    except subprocess.TimeoutExpired:
+        return None
+    if out.returncode != 0:
+        return None
+    return set((out.stdout.strip().splitlines() or [""])[-1].split(","))
+
+
 def check_canvas_patch():
-    """labelImg 1.8.6 hands floats to QPainter; warn if this copy is still unpatched."""
+    """labelImg 1.8.6 hands floats to QPainter; report if this copy is still unpatched."""
     try:
         import libs.canvas as canvas
-    except ImportError:
-        return None
-    try:
         src = inspect.getsource(canvas)
-    except OSError:
+    except (ImportError, OSError):
         return None
     return [line.strip() for line in src.splitlines()
             if ("drawRect(" in line or "drawLine(" in line) and "int(" not in line]
@@ -61,14 +82,12 @@ def main():
         for path in added:
             print(f"  {path}")
 
-    from PyQt5.QtGui import QImageReader
-    from PyQt5.QtWidgets import QApplication
-
-    app = QApplication(sys.argv[:1])
-    formats = {f.data().decode().lower() for f in QImageReader.supportedImageFormats()}
+    formats = supported_formats()
+    if formats is None:
+        sys.exit("could not query Qt image formats - is PyQt5 installed in this interpreter?")
     if "jpg" not in formats:
         sys.exit(
-            "Qt still cannot read JPEG - the qjpeg plugin failed to load.\n"
+            "Qt cannot read JPEG - the qjpeg plugin failed to load.\n"
             f"  plugin dir: {os.path.join(sys.prefix, 'Library', 'plugins', 'imageformats')}\n"
             "  labelImg would show an empty file list. Launch from an activated conda\n"
             "  environment, or reinstall with: conda install -c conda-forge qt-main"
@@ -96,10 +115,11 @@ def main():
     print("  labelImg loads .txt regardless of format, but SAVES PascalVOC XML by default,")
     print("  which would leave your work out of the .txt files entirely.")
 
-    from labelImg.labelImg import get_main_app
+    # Hand over to labelImg in this same process, having created no QApplication of our own.
+    sys.argv = [sys.argv[0], images, classes, labels]
+    from labelImg.labelImg import main as labelimg_main
 
-    app, _win = get_main_app([sys.argv[0], images, classes, labels])
-    return app.exec_()
+    return labelimg_main()
 
 
 if __name__ == "__main__":
