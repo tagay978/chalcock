@@ -151,6 +151,43 @@ them are not among the 50 classes — the model will still put a label on them, 
 must be reviewed and deleted. And for brand coverage specifically, photographing the actual
 bottles is both cleaner and higher quality than anything a search returns.
 
+## The real-world test set
+
+Nothing above can be improved while the only yardstick is a split that shares photo sessions with
+training. `scripts/prepare_testset.py` builds an annotation-ready set from the harvested photos:
+
+```bash
+python scripts/prepare_testset.py --limit 60
+```
+
+Boxes are proposed by the COCO detector, which is good at finding bottles even when the brand
+model is not, and every proposal is written as class **`unknown_bottle`** (id 50, appended after
+the 50 trained classes in their training order). Annotation is therefore relabelling rather than
+drawing — the slow part is already done.
+
+Three rules make the set measure what it needs to:
+
+1. Change the class on bottles you recognise as one of the 50.
+2. **Leave everything else as `unknown_bottle`.** This is an annotation, not a skip: it is the
+   only way to measure how often the model puts a brand name on a bottle it has never seen.
+3. Delete boxes that are not bottles; add bottles the proposer missed.
+
+`labelImg` works for this (`pip install labelImg`, open the `images/` folder, set the save dir to
+`labels/`, switch the format to YOLO, and point the predefined-class list at the 51 names from
+`testset/data.yaml`). Version 1.8.6 crashes on modern PyQt5 because it passes float coordinates
+to `drawRect`/`drawLine`; casting those to `int` in `libs/canvas.py` fixes it. Roboflow also
+imports the folder as-is if you would rather annotate in a browser.
+
+Then:
+
+```bash
+python scripts/eval_realworld.py
+```
+
+which reports, for both the direct and `--two-stage` paths, how many known bottles were found,
+how many were named correctly, and — the number that matters — what fraction of `unknown_bottle`
+annotations drew a confident known-class prediction anyway.
+
 ### Data provenance
 
 `finalloopy/` carries a CC BY 4.0 marking from its Roboflow export, but the underlying images
