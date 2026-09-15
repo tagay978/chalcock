@@ -19,6 +19,8 @@ WEIGHTS = os.path.join(ROOT, "weights")
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default=DATA,
+                    help="dataset yaml; use dataset_abstain/data.yaml for the 51-class model")
     ap.add_argument("--model", default="yolo11s.pt")
     ap.add_argument("--epochs", type=int, default=200)
     ap.add_argument("--imgsz", type=int, default=640)
@@ -34,7 +36,7 @@ def main():
     model = YOLO(local if os.path.exists(local) else args.model)
 
     model.train(
-        data=DATA,
+        data=args.data,
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,

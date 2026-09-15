@@ -17,3 +17,9 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .venv/
+
+# Abstain training set — rebuild with: python scripts/build_abstain_dataset.py
+dataset_abstain/
+
+# Rendered prediction samples — regenerate with: python scripts/show_predictions.py
+samples/
