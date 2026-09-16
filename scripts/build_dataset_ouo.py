@@ -38,6 +38,7 @@ OUT = os.path.join(ROOT, "dataset_v2")
 IMG_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 PHASH_MAX = 2
 IOU_SAME = 0.6
+SAME_RECT = 0.9       # above this two boxes are the same rectangle, not two adjacent bottles
 
 # The old merge used three names ouo_final spells differently. Everything else lines up once
 # punctuation is ignored: 47 of the old 50 matched directly.
@@ -299,14 +300,42 @@ def group(records):
     return list(groups.values()), near
 
 
-def merge_boxes(members, records):
+def merge_boxes(members, records, dropped=None):
+    """Union the boxes of one photo, discarding rectangles the sources disagree about.
+
+    ouo_final copies a whole label file between brand folders and relabels every box to that
+    folder's brand, so a shelf photo filed under gin, bitters and cointreau arrives with three
+    identical sets of rectangles under three names. Unioning those blindly teaches the model
+    that one bottle is three different things - it accounted for a fifth of all boxes.
+
+    Where the same rectangle carries more than one class there is no way to tell which source was
+    right, so the whole cluster goes. The bottle becomes unlabelled, which is wrong but far less
+    wrong than three contradictory names.
+    """
     merged = []
     for i in members:
         for box in records[i]["boxes"]:
             if any(box[0] == m[0] and iou(box, m) > IOU_SAME for m in merged):
                 continue
             merged.append(box)
-    return merged
+
+    clusters = []
+    for box in merged:
+        for c in clusters:
+            if iou(box, c[0][0]) >= SAME_RECT:
+                c.append((box, box[0]))
+                break
+        else:
+            clusters.append([(box, box[0])])
+
+    kept = []
+    for c in clusters:
+        if len({name for _, name in c}) > 1:
+            if dropped is not None:
+                dropped[0] += len(c)
+            continue
+        kept.append(c[0][0])
+    return kept
 
 
 def sanitize(stem):
@@ -395,7 +424,11 @@ def main():
     print(f"  photos present in both:          {mixed}")
     print(f"  classes: {len(names)}")
 
-    per_class = Counter(b[0] for g in groups for b in merge_boxes(g, records))
+    conflict = [0]
+    per_class = Counter(b[0] for g in groups for b in merge_boxes(g, records, conflict))
+    if conflict[0]:
+        print(f"  dropped {conflict[0]} boxes the sources disagreed about "
+              f"(same rectangle, different class)")
     thin = [f"{c}:{per_class[c]}" for c in names if per_class[c] < 15]
     print(f"  boxes: {sum(per_class.values())}")
     if thin:
