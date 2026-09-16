@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections import Counter
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -28,6 +29,7 @@ import yaml
 from PIL import Image, ImageTk
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ALL = "(전체)"
 FIXES = os.path.join(ROOT, "label_fixes")
 COLS, ROWS = 8, 4
 TILE = 150
@@ -69,6 +71,7 @@ class Review:
         self.page = 0
         self.items = []          # (image filename, box index, [cid, x, y, w, h])
         self.labels = {}         # image filename -> list of boxes, edited in place
+        self.split_of = {}       # image filename -> the split it lives in
         self.touched = set()
         self.picked = set()
         self.tiles = []
@@ -168,15 +171,25 @@ class Review:
 
     def reload_splits(self):
         _, _, splits = self.current_set()
-        self.split_box["values"] = splits
-        if self.split_var.get() not in splits:
-            self.split_var.set(splits[0])
+        choices = ([ALL] + splits) if len(splits) > 1 else splits
+        self.split_box["values"] = choices
+        if self.split_var.get() not in choices:
+            self.split_var.set(choices[0])
 
-    def dirs(self):
+    def chosen_splits(self):
+        _, _, splits = self.current_set()
+        return splits if self.split_var.get() == ALL else [self.split_var.get()]
+
+    def split_dirs(self, split):
         _, path, _ = self.current_set()
-        split = self.split_var.get()
         base = path if split == "." else os.path.join(path, split)
         return os.path.join(base, "images"), os.path.join(base, "labels")
+
+    def dirs_for(self, fn):
+        """A bottle does not care which split its photo landed in, so the grid can span all
+        three. Filenames carry an md5 prefix and are unique across the dataset, so one map
+        from filename to split is enough to find the image and its label again."""
+        return self.split_dirs(self.split_of[fn])
 
     def names(self):
         _, path, _ = self.current_set()
@@ -185,28 +198,30 @@ class Review:
     def reload_classes(self):
         if not self.confirm_discard():
             return
-        idir, ldir = self.dirs()
         names = self.names()
-        self.labels, self.touched = {}, set()
+        self.labels, self.touched, self.split_of = {}, set(), {}
         counts = {}
-        for fn in sorted(os.listdir(idir)):
-            if not fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                continue
-            path = os.path.join(ldir, os.path.splitext(fn)[0] + ".txt")
-            rows = []
-            if os.path.exists(path):
-                for line in open(path, encoding="utf-8"):
-                    p = line.split()
-                    if len(p) != 5:
-                        continue
-                    try:
-                        rows.append([int(p[0]), *(float(v) for v in p[1:5])])
-                    except ValueError:
-                        continue
-            self.labels[fn] = rows
-            for r in rows:
-                if 0 <= r[0] < len(names):
-                    counts[names[r[0]]] = counts.get(names[r[0]], 0) + 1
+        for split in self.chosen_splits():
+            idir, ldir = self.split_dirs(split)
+            for fn in sorted(os.listdir(idir)):
+                if not fn.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    continue
+                path = os.path.join(ldir, os.path.splitext(fn)[0] + ".txt")
+                rows = []
+                if os.path.exists(path):
+                    for line in open(path, encoding="utf-8"):
+                        p = line.split()
+                        if len(p) != 5:
+                            continue
+                        try:
+                            rows.append([int(p[0]), *(float(v) for v in p[1:5])])
+                        except ValueError:
+                            continue
+                self.labels[fn] = rows
+                self.split_of[fn] = split
+                for r in rows:
+                    if 0 <= r[0] < len(names):
+                        counts[names[r[0]]] = counts.get(names[r[0]], 0) + 1
 
         ordered = sorted(counts, key=lambda n: -counts[n])
         self.class_box["values"] = [f"{n}  ({counts[n]})" for n in ordered]
@@ -310,9 +325,9 @@ class Review:
     def save(self):
         if not self.touched:
             return
-        _, ldir = self.dirs()
         names = self.names()
         for fn in sorted(self.touched):
+            _, ldir = self.dirs_for(fn)
             rows = self.labels[fn]
             stem = os.path.splitext(fn)[0]
             with open(os.path.join(ldir, stem + ".txt"), "w", encoding="utf-8") as fh:
@@ -340,7 +355,7 @@ class Review:
         if index >= len(self.items):
             return
         fn, bi = self.items[index]
-        idir, _ = self.dirs()
+        idir, _ = self.dirs_for(fn)
         names = self.names()
         boxes = self.labels[fn]
         if bi >= len(boxes):
@@ -373,8 +388,8 @@ class Review:
         label.image = photo            # keep a reference or Tk drops the image
         label.pack()
         cls = names[boxes[bi][0]] if 0 <= boxes[bi][0] < len(names) else "?"
-        tk.Label(win, text=f"{fn}   ·   {W}x{H}   ·   이 박스: {cls}   ·   "
-                           f"사진 전체 박스 {len(boxes)}개   ·   Esc 닫기",
+        tk.Label(win, text=f"{fn}   ·   {self.split_of[fn]}   ·   {W}x{H}   ·   "
+                           f"이 박스: {cls}   ·   사진 전체 박스 {len(boxes)}개   ·   Esc 닫기",
                  bg=PANEL, fg=MUTED, anchor="w", padx=10, pady=6).pack(fill="x")
         win.bind("<Escape>", lambda _e: win.destroy())
         win.bind("<Double-Button-1>", lambda _e: win.destroy())
@@ -383,11 +398,14 @@ class Review:
     # ---------- drawing ----------
     def update_counter(self):
         pages = max(1, (len(self.items) + COLS * ROWS - 1) // (COLS * ROWS))
-        self.counter.config(text=f"{self.selected_class()} · {len(self.items)}개 · "
-                                 f"{self.page + 1}/{pages} 쪽")
+        spread = Counter(self.split_of[fn] for fn, _ in self.items)
+        where = " / ".join(f"{k} {spread[k]}" for k in ("train", "valid", "test") if spread[k])
+        self.counter.config(text=f"{self.selected_class()} · {len(self.items)}개"
+                                 + (f" ({where})" if where else "")
+                                 + f" · {self.page + 1}/{pages} 쪽")
 
     def crop(self, fn, box):
-        idir, _ = self.dirs()
+        idir, _ = self.dirs_for(fn)
         with Image.open(os.path.join(idir, fn)) as im:
             im = im.convert("RGB")
             W, H = im.size
