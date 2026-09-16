@@ -39,3 +39,6 @@ dataset_fam/
 
 # Hand-corrected labels from scripts/label_viewer.py — human work, tracked on purpose.
 !label_fixes/
+
+# staged from ouo_final by scripts/build_conflict_todo.py; rebuild it instead of tracking it
+dataset_todo/

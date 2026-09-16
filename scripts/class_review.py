@@ -40,7 +40,7 @@ MUTED = "#8d95a8"
 ACCENT = "#f0a04b"
 PICKED = "#ffffff"
 
-PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset"]
+PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset", "dataset_todo"]
 
 
 def datasets():

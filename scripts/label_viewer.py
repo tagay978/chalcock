@@ -52,7 +52,7 @@ SELECT = "#ffffff"
 
 # Newest and richest first, so the viewer does not open on the 50-class set that predates
 # ouo_final and lacks most brands. Anything not listed follows in name order.
-PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset"]
+PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset", "dataset_todo"]
 
 
 def datasets():
