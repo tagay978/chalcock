@@ -49,8 +49,13 @@ ACCENT = "#f0a04b"
 SELECT = "#ffffff"
 
 
+# Newest and richest first, so the viewer does not open on the 50-class set that predates
+# ouo_final and lacks most brands. Anything not listed follows in name order.
+PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset"]
+
+
 def datasets():
-    """Every directory here that looks like a YOLO dataset."""
+    """Every directory here that looks like a YOLO dataset, most useful first."""
     out = []
     for name in sorted(os.listdir(ROOT)):
         path = os.path.join(ROOT, name)
@@ -62,6 +67,7 @@ def datasets():
             splits = ["."]                      # testset keeps images/ and labels/ at the top
         if splits:
             out.append((name, path, splits))
+    out.sort(key=lambda d: (PREFERRED.index(d[0]) if d[0] in PREFERRED else len(PREFERRED), d[0]))
     return out
 
 
@@ -140,10 +146,11 @@ class Browser:
         edit.pack(fill="x")
         tk.Label(edit, text="새 박스 / 선택한 박스 클래스", bg=PANEL, fg=MUTED).pack(side="left")
         self.new_class = tk.StringVar()
-        self.new_class_box = ttk.Combobox(edit, textvariable=self.new_class, width=26,
-                                          state="readonly")
+        self.new_class_box = ttk.Combobox(edit, textvariable=self.new_class, width=26)
         self.new_class_box.pack(side="left", padx=(8, 12))
         self.new_class_box.bind("<<ComboboxSelected>>", lambda _e: self.retype_selected())
+        self.new_class_box.bind("<KeyRelease>", self.filter_classes)
+        self.new_class_box.bind("<Return>", lambda _e: self.retype_selected())
         tk.Button(edit, text="선택 삭제 (Del)", command=self.delete_selected,
                   bg=PANEL, fg=TEXT).pack(side="left")
         self.hint = tk.Label(edit, text="빈 곳을 드래그하면 새 박스", bg=PANEL, fg=MUTED)
@@ -164,16 +171,28 @@ class Browser:
                               font=("Consolas", 10), padx=10)
         self.detail.pack(fill="both", expand=True, pady=(0, 12))
 
+        # The class box is typeable, so global shortcuts must not fire while it has focus -
+        # otherwise typing "absolut" flags the photo on the f and deletes a box on nothing.
+        def unless_typing(fn):
+            def handler(_event=None):
+                if self.root.focus_get() in (self.new_class_box,):
+                    return
+                fn()
+            return handler
+        self.unless_typing = unless_typing
+
         self.canvas.bind("<Button-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
         for key, delta in (("<Left>", -1), ("<Right>", 1), ("<Prior>", -10), ("<Next>", 10)):
-            self.root.bind(key, lambda _e, d=delta: self.step(d))
-        self.root.bind("<Delete>", lambda _e: self.delete_selected())
-        self.root.bind("<BackSpace>", lambda _e: self.delete_selected())
+            self.root.bind(key, unless_typing(lambda d=delta: self.step(d)))
+        self.root.bind("<Delete>", unless_typing(self.delete_selected))
+        self.root.bind("<BackSpace>", unless_typing(self.delete_selected))
         self.root.bind("<Control-s>", lambda _e: self.save())
-        self.root.bind("<f>", lambda _e: self.toggle_flag())
-        self.root.bind("<F>", lambda _e: self.toggle_flag())
+        self.root.bind("<f>", unless_typing(self.toggle_flag))
+        self.root.bind("<F>", unless_typing(self.toggle_flag))
+        # Escape returns focus to the image so the shortcuts work again.
+        self.root.bind("<Escape>", lambda _e: self.canvas.focus_set())
         self.root.bind("<Configure>", lambda _e: self.render())
 
     # ---------- paths ----------
@@ -396,6 +415,17 @@ class Browser:
         self.render()
 
     # ---------- editing ----------
+    def filter_classes(self, event):
+        """Type to narrow the class list; 113 brands are not worth scrolling."""
+        if event.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
+            return
+        typed = self.new_class.get().lower()
+        allnames = self.names()
+        matches = [n for n in allnames if typed in n.lower()] if typed else allnames
+        self.new_class_box["values"] = matches or allnames
+        if typed and matches:
+            self.new_class_box.event_generate("<Down>")
+
     def delete_selected(self):
         if self.selected is None or self.selected >= len(self.boxes):
             return
