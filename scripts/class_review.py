@@ -132,7 +132,7 @@ class Review:
         tk.Button(act, text="적용", command=self.retype, bg=ACCENT, fg="#1a1205").pack(side="left")
         tk.Button(act, text="선택 삭제 (Del)", command=self.delete, bg=PANEL,
                   fg=TEXT).pack(side="left", padx=10)
-        tk.Label(act, text="클릭 선택 · 드래그/Shift 연속 선택 · A 전체 · Esc 해제",
+        tk.Label(act, text="클릭 선택 · Shift 연속 · A 전체 · Esc 해제 · 더블클릭 원본 보기",
                  bg=PANEL, fg=MUTED).pack(side="left", padx=12)
 
         self.grid = tk.Frame(self.root, bg=BG)
@@ -329,6 +329,57 @@ class Review:
         self.counter.config(text=f"{saved}장 저장됨")
         self.root.after(1500, self.update_counter)
 
+    # ---------- full view ----------
+    def open_full(self, index):
+        """Show the whole photo with this box picked out.
+
+        A crop says what the bottle looks like but not which bottle it is. On a shelf of forty
+        the only way to judge a label is to see where it sits, so the chosen box is drawn bright
+        and the rest of the photo's boxes faintly behind it.
+        """
+        if index >= len(self.items):
+            return
+        fn, bi = self.items[index]
+        idir, _ = self.dirs()
+        names = self.names()
+        boxes = self.labels[fn]
+        if bi >= len(boxes):
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title(fn)
+        win.configure(bg=BG)
+        screen_w = int(win.winfo_screenwidth() * 0.85)
+        screen_h = int(win.winfo_screenheight() * 0.85)
+
+        from PIL import ImageDraw
+        with Image.open(os.path.join(idir, fn)) as im:
+            image = im.convert("RGB")
+        W, H = image.size
+        pen = ImageDraw.Draw(image)
+        for i, (cid, x, y, w, h) in enumerate(boxes):
+            rect = ((x - w / 2) * W, (y - h / 2) * H, (x + w / 2) * W, (y + h / 2) * H)
+            chosen = i == bi
+            pen.rectangle(rect, outline=(240, 160, 75) if chosen else (110, 120, 140),
+                          width=max(4, W // 250) if chosen else max(1, W // 700))
+            if chosen:
+                name = names[cid] if 0 <= cid < len(names) else str(cid)
+                pen.text((rect[0] + 6, max(0, rect[1] - 24)), name, fill=(240, 160, 75))
+
+        scale = min(screen_w / W, screen_h / H, 1.0)
+        shown = image.resize((int(W * scale), int(H * scale)))
+        photo = ImageTk.PhotoImage(shown)
+        label = tk.Label(win, image=photo, bg=BG)
+        label.image = photo            # keep a reference or Tk drops the image
+        label.pack()
+        cls = names[boxes[bi][0]] if 0 <= boxes[bi][0] < len(names) else "?"
+        tk.Label(win, text=f"{fn}   ·   {W}x{H}   ·   이 박스: {cls}   ·   "
+                           f"사진 전체 박스 {len(boxes)}개   ·   Esc 닫기",
+                 bg=PANEL, fg=MUTED, anchor="w", padx=10, pady=6).pack(fill="x")
+        win.bind("<Escape>", lambda _e: win.destroy())
+        win.bind("<Double-Button-1>", lambda _e: win.destroy())
+        win.focus_set()
+
     # ---------- drawing ----------
     def update_counter(self):
         pages = max(1, (len(self.items) + COLS * ROWS - 1) // (COLS * ROWS))
@@ -381,6 +432,7 @@ class Review:
             cap.pack()
             for widget in (frame, lbl, cap):
                 widget.bind("<Button-1>", lambda e, i=index: self.on_click(i, e))
+                widget.bind("<Double-Button-1>", lambda e, i=index: self.open_full(i))
             self.tiles.append((index, frame))
 
         self.paint_selection()
