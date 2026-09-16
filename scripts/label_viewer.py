@@ -40,6 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # datasets share filenames and differ only in vocabulary.
 FIXES = os.path.join(ROOT, "label_fixes")
 MIN_NEW_BOX = 8          # pixels on screen; below this a drag is a click, not a box
+SAME_RECT = 0.9          # above this IoU two boxes are the same rectangle, not two bottles
 
 BG = "#0d0f14"
 PANEL = "#161a22"
@@ -71,6 +72,17 @@ def datasets():
     return out
 
 
+def box_iou(a, b):
+    """Overlap of two [cid, x, y, w, h] rows, ignoring the class."""
+    ax1, ay1, ax2, ay2 = a[1] - a[3] / 2, a[2] - a[4] / 2, a[1] + a[3] / 2, a[2] + a[4] / 2
+    bx1, by1, bx2, by2 = b[1] - b[3] / 2, b[2] - b[4] / 2, b[1] + b[3] / 2, b[2] + b[4] / 2
+    iw, ih = min(ax2, bx2) - max(ax1, bx1), min(ay2, by2) - max(ay1, by1)
+    if iw <= 0 or ih <= 0:
+        return 0.0
+    inter = iw * ih
+    return inter / (a[3] * a[4] + b[3] * b[4] - inter)
+
+
 def class_colour(index):
     """Spread hues so neighbouring class ids stay visually distinct."""
     h = (index * 0.6180339887) % 1.0            # golden ratio keeps consecutive ids far apart
@@ -79,19 +91,23 @@ def class_colour(index):
 
 
 class Browser:
-    def __init__(self, root, dataset=None, split=None, only=None, flagged_only=False):
+    def __init__(self, root, dataset=None, split=None, only=None, flagged_only=False,
+                 start=0):
         self.root = root
         self.sets = datasets()
         if not self.sets:
             raise SystemExit("no dataset with a data.yaml found under the repository")
         self.only = only
         self.flagged_only = flagged_only
+        self.start = start
         self.index = 0
         self.files = []
         self.boxes = []          # [cid, x, y, w, h] in normalised coords, edited in place
         self.selected = None
         self.dirty = False
         self.drag = None
+        self.collapsed = 0
+        self.stacked = {}
         self.build()
         if dataset:
             self.ds_var.set(dataset)
@@ -148,9 +164,11 @@ class Browser:
         self.new_class = tk.StringVar()
         self.new_class_box = ttk.Combobox(edit, textvariable=self.new_class, width=26)
         self.new_class_box.pack(side="left", padx=(8, 12))
-        self.new_class_box.bind("<<ComboboxSelected>>", lambda _e: self.retype_selected())
+        # Hand focus back to the image after a class is chosen, or the arrow keys and Delete
+        # stay swallowed by the combobox and the shortcuts look broken.
+        self.new_class_box.bind("<<ComboboxSelected>>", lambda _e: self.retype_selected(True))
         self.new_class_box.bind("<KeyRelease>", self.filter_classes)
-        self.new_class_box.bind("<Return>", lambda _e: self.retype_selected())
+        self.new_class_box.bind("<Return>", lambda _e: self.retype_selected(True))
         tk.Button(edit, text="선택 삭제 (Del)", command=self.delete_selected,
                   bg=PANEL, fg=TEXT).pack(side="left")
         self.hint = tk.Label(edit, text="빈 곳을 드래그하면 새 박스", bg=PANEL, fg=MUTED)
@@ -220,7 +238,14 @@ class Browser:
         return os.path.join(path, "review.csv")
 
     # ---------- label io ----------
-    def read_boxes(self, stem):
+    def read_boxes(self, stem, collapse=True):
+        """Read a label file, folding stacked rectangles into one.
+
+        The source copies whole label files between brand folders and relabels every box, so one
+        bottle often arrives as two or three identical rectangles under different names. Deleting
+        each of them by hand is pointless work: keep one and remember the names it carried, so
+        renaming it is the only thing left to do.
+        """
         _, ldir = self.dirs()
         path = os.path.join(ldir, stem + ".txt")
         out = []
@@ -234,7 +259,23 @@ class Browser:
                 out.append([int(p[0]), *(float(v) for v in p[1:5])])
             except ValueError:
                 continue
-        return out
+        if not collapse:
+            return out
+
+        names = self.names()
+        kept, self.stacked = [], {}
+        for box in out:
+            for i, k in enumerate(kept):
+                if box_iou(box, k) >= SAME_RECT:
+                    label = names[box[0]] if 0 <= box[0] < len(names) else str(box[0])
+                    self.stacked.setdefault(i, set()).add(label)
+                    break
+            else:
+                label = names[box[0]] if 0 <= box[0] < len(names) else str(box[0])
+                self.stacked[len(kept)] = {label}
+                kept.append(box)
+        self.collapsed = len(out) - len(kept)
+        return kept
 
     def save(self):
         if not self.files:
@@ -338,12 +379,15 @@ class Browser:
         else:
             self.class_var.set("(전체)")
             self.files = everything
-        self.index = 0
+        self.index = min(max(0, self.start), max(0, len(self.files) - 1))
+        self.start = 0
         self.load_current()
 
     def load_current(self):
         self.selected = None
         self.dirty = False
+        self.collapsed = 0
+        self.stacked = {}
         if self.files:
             self.boxes = self.read_boxes(os.path.splitext(self.files[self.index])[0])
         else:
@@ -434,14 +478,15 @@ class Browser:
         self.dirty = True
         self.render()
 
-    def retype_selected(self):
-        if self.selected is None:
-            return
+    def retype_selected(self, release_focus=False):
         names = self.names()
-        if self.new_class.get() in names:
+        if self.selected is not None and self.new_class.get() in names:
             self.boxes[self.selected][0] = names.index(self.new_class.get())
             self.dirty = True
             self.render()
+        if release_focus:
+            self.new_class_box["values"] = names      # undo any type-ahead filtering
+            self.canvas.focus_set()
 
     # ---------- drawing ----------
     def render(self):
@@ -475,6 +520,9 @@ class Browser:
                                     fill="#14171d", font=("Consolas", 9, "bold"))
             mark = "►" if i == self.selected else " "
             listing.append(f"{mark} {name:<24} {box[3] * 100:5.1f}% x {box[4] * 100:5.1f}%")
+            others = sorted(self.stacked.get(i, set()) - {name})
+            if others:
+                listing.append(f"    겹쳤던 이름: {', '.join(others)}")
 
         if self.drag:
             self.canvas.create_rectangle(*self.drag, outline=ACCENT, width=2, dash=(4, 3))
@@ -487,6 +535,7 @@ class Browser:
         self.save_btn.config(fg=ACCENT if self.dirty else TEXT)
         self.title.config(
             text=f"{fn}\n{self.img_w}x{self.img_h} · 박스 {len(self.boxes)}개"
+                 + (f"  · 겹친 박스 {self.collapsed}개 합침" if self.collapsed else "")
                  + ("  · 수정됨" if self.dirty else "")
                  + ("  · 저장된 수정" if fixed and not self.dirty else "")
                  + ("  · 표시됨" if flagged else ""))
@@ -511,10 +560,12 @@ def main():
     ap.add_argument("--split", help="train, valid, test")
     ap.add_argument("--class", dest="only", help="show only photos containing this class")
     ap.add_argument("--flagged", action="store_true", help="show only photos flagged for review")
+    ap.add_argument("--index", type=int, default=1,
+                    help="open at this position in the list, as the counter shows it")
     args = ap.parse_args()
 
     root = tk.Tk()
-    Browser(root, args.dataset, args.split, args.only, args.flagged)
+    Browser(root, args.dataset, args.split, args.only, args.flagged, max(0, args.index - 1))
     root.mainloop()
 
 
