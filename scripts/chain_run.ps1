@@ -28,6 +28,9 @@ while ($true) {
 }
 Write-Output "$WaitFor finished"
 
+Write-Output "scoring $WaitFor checkpoints on the real-world test set ..."
+& $python scripts\eval_checkpoints.py --run $WaitFor 2>&1 | Select-Object -Last 25
+
 Write-Output "rebuilding dataset_v2 on the current label_fixes ..."
 & $python scripts\build_dataset_ouo.py 2>&1 | Select-Object -Last 14
 
