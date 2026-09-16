@@ -1,0 +1,5 @@
+havanaclubanejoespecial 0.501589 0.562998 0.211895 0.704478
+havanaclubanejoespecial 0.702637 0.442314 0.229723 0.751180
+havanaclubanejoespecial 0.338040 0.562004 0.129042 0.479079
+havanaclubanejoespecial 0.181794 0.567194 0.132324 0.453823
+havanaclubanejoespecial 0.227551 0.740064 0.065159 0.198056

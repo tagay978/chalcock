@@ -513,7 +513,7 @@ def main():
         return name
 
     cls_id = {n: i for i, n in enumerate(names)}
-    applied, unmapped = 0, Counter()
+    applied, unmapped, empty_dropped = 0, Counter(), 0
     counts, box_counts = Counter(), Counter()
     resized = [0]
     manifest = [("file", "split", "n_boxes", "classes", "sources")]
@@ -535,6 +535,13 @@ def main():
                     unmapped[cname] += 1
             boxes = replaced
             applied += 1
+
+        # A photo with nothing left to label is a photo the annotator threw out - too blurred,
+        # too dark, nothing identifiable. Keeping it would only teach the model that bottles
+        # are background.
+        if not boxes:
+            empty_dropped += 1
+            continue
         dest = os.path.join(OUT, split, "images", name + ext)
         with Image.open(r["path"]) as im:
             if max(im.size) > args.max_side:
@@ -579,6 +586,8 @@ def main():
     print(f"  {resized[0]} images shrunk to a {args.max_side}px long edge")
     if applied:
         print(f"  {applied} photos took their labels from {os.path.basename(FIXES)}/")
+    if empty_dropped:
+        print(f"  {empty_dropped} photos dropped for having no usable label left")
     if unmapped:
         print(f"  fix classes with no place in this vocabulary: "
               + ", ".join(f"{k} x{v}" for k, v in unmapped.most_common(6)))

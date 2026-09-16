@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--device", default="0")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--patience", type=int, default=50,
+                    help="stop after this many epochs without a better validation score; "
+                         "set it to --epochs to always run the full schedule")
     ap.add_argument("--save-period", type=int, default=20,
                     help="also write weights/epochN.pt every N epochs, so intermediate models "
                          "can be tested; -1 keeps only last and best")
@@ -51,7 +54,7 @@ def main():
         seed=0,
         cache=args.cache or False,
         save_period=args.save_period,
-        patience=50,
+        patience=args.patience,
         close_mosaic=15,
         project=os.path.join(ROOT, "runs"),
         name=args.name or os.path.splitext(args.model)[0],
