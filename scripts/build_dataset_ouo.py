@@ -33,6 +33,10 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUO = os.path.join(ROOT, "ouo_final")
+# Hand corrections made in scripts/label_viewer.py. Stored as `<class name> x y w h` rather than
+# class ids, so one fix applies to every level: the names are mapped into whichever vocabulary
+# is being built. Rebuilding would otherwise discard the work, since the datasets are generated.
+FIXES = os.path.join(ROOT, "label_fixes")
 OLD = os.path.join(ROOT, "dataset")
 OUT = os.path.join(ROOT, "dataset_v2")
 IMG_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
@@ -338,6 +342,27 @@ def merge_boxes(members, records, dropped=None):
     return kept
 
 
+def load_fixes():
+    """filename -> [(class name, x, y, w, h)] for every photo somebody corrected by hand."""
+    out = {}
+    if not os.path.isdir(FIXES):
+        return out
+    for fn in sorted(os.listdir(FIXES)):
+        if not fn.endswith(".txt"):
+            continue
+        rows = []
+        for line in open(os.path.join(FIXES, fn), encoding="utf-8"):
+            parts = line.split()
+            if len(parts) != 5:
+                continue
+            try:
+                rows.append((parts[0], *(float(v) for v in parts[1:5])))
+            except ValueError:
+                continue
+        out[fn[:-4]] = rows        # key is the image filename, extension included
+    return out
+
+
 def sanitize(stem):
     stem = re.sub(r"\.rf\.[0-9a-f]{32}", "", stem, flags=re.I)
     return (re.sub(r"[^A-Za-z0-9_-]+", "_", stem).strip("_") or "img")[:56]
@@ -474,7 +499,21 @@ def main():
         quota[key][split] += len(boxes)
         assign[gi] = split
 
+    fixes = load_fixes()
+    if fixes:
+        print(f"  {len(fixes)} hand-corrected photos in {os.path.basename(FIXES)}/")
+
+    def as_local(name):
+        """Map a fix's class name into the vocabulary being built."""
+        name = SYNONYMS.get(name, name)
+        if args.level == "family":
+            name = FAMILY_OF.get(name, name)
+        elif to_ingredient is not None:
+            name = to_ingredient(name) or name
+        return name
+
     cls_id = {n: i for i, n in enumerate(names)}
+    applied, unmapped = 0, Counter()
     counts, box_counts = Counter(), Counter()
     resized = [0]
     manifest = [("file", "split", "n_boxes", "classes", "sources")]
@@ -485,6 +524,17 @@ def main():
         boxes = merge_boxes(members, records)
         name = f"{r['md5'][:12]}_{sanitize(r['stem'])}"
         ext = ".jpg" if r["ext"] in (".jpg", ".jpeg") else r["ext"]
+        fix = fixes.get(name + ext)
+        if fix is not None:
+            replaced = []
+            for cname, x, y, w, h in fix:
+                local = as_local(cname)
+                if local in cls_id:
+                    replaced.append((local, x, y, w, h))
+                else:
+                    unmapped[cname] += 1
+            boxes = replaced
+            applied += 1
         dest = os.path.join(OUT, split, "images", name + ext)
         with Image.open(r["path"]) as im:
             if max(im.size) > args.max_side:
@@ -527,6 +577,11 @@ def main():
     print(f"\nwrote {OUT}")
     print("  splits:", dict(counts))
     print(f"  {resized[0]} images shrunk to a {args.max_side}px long edge")
+    if applied:
+        print(f"  {applied} photos took their labels from {os.path.basename(FIXES)}/")
+    if unmapped:
+        print(f"  fix classes with no place in this vocabulary: "
+              + ", ".join(f"{k} x{v}" for k, v in unmapped.most_common(6)))
     missing = [c for c in names if c not in ingredient]
     if missing:
         print(f"  no category for {len(missing)} classes (from the old set only): "

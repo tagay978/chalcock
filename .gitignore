@@ -36,3 +36,6 @@ dataset_ing/
 
 # Brand-family dataset — rebuild with: python scripts/build_dataset_ouo.py --level family
 dataset_fam/
+
+# Hand-corrected labels from scripts/label_viewer.py — human work, tracked on purpose.
+!label_fixes/

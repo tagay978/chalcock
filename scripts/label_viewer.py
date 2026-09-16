@@ -34,6 +34,11 @@ import yaml
 from PIL import Image, ImageTk
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Saved edits go here as well as to the live label file. The datasets are generated, so a fix
+# written only into dataset_ing/ disappears the next time the builder runs; an overlay keyed by
+# image filename and holding class NAMES survives, and applies to every level, since the three
+# datasets share filenames and differ only in vocabulary.
+FIXES = os.path.join(ROOT, "label_fixes")
 MIN_NEW_BOX = 8          # pixels on screen; below this a drag is a click, not a box
 
 BG = "#0d0f14"
@@ -216,12 +221,25 @@ class Browser:
         if not self.files:
             return
         _, ldir = self.dirs()
-        stem = os.path.splitext(self.files[self.index])[0]
+        fn = self.files[self.index]
+        stem = os.path.splitext(fn)[0]
+        names = self.names()
         with open(os.path.join(ldir, stem + ".txt"), "w", encoding="utf-8") as fh:
             for cid, x, y, w, h in self.boxes:
                 fh.write(f"{cid} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+
+        # The durable copy. Class names rather than ids, so the builder can translate it into
+        # whichever vocabulary it is building; the live file above is discarded on every rebuild.
+        os.makedirs(FIXES, exist_ok=True)
+        with open(os.path.join(FIXES, fn + ".txt"), "w", encoding="utf-8") as fh:
+            for cid, x, y, w, h in self.boxes:
+                label = names[cid] if 0 <= cid < len(names) else str(cid)
+                fh.write(f"{label} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
         self.dirty = False
         self.render()
+
+    def has_fix(self, fn):
+        return os.path.exists(os.path.join(FIXES, fn + ".txt"))
 
     # ---------- flags ----------
     def load_flags(self):
@@ -432,6 +450,7 @@ class Browser:
             self.canvas.create_rectangle(*self.drag, outline=ACCENT, width=2, dash=(4, 3))
 
         flagged = fn in self.load_flags()
+        fixed = self.has_fix(fn)
         self.counter.config(text=f"{self.index + 1} / {len(self.files)}")
         self.flag_btn.config(text="표시 해제 (F)" if flagged else "표시 (F)",
                              fg=ACCENT if flagged else TEXT)
@@ -439,6 +458,7 @@ class Browser:
         self.title.config(
             text=f"{fn}\n{self.img_w}x{self.img_h} · 박스 {len(self.boxes)}개"
                  + ("  · 수정됨" if self.dirty else "")
+                 + ("  · 저장된 수정" if fixed and not self.dirty else "")
                  + ("  · 표시됨" if flagged else ""))
         self.detail.config(state="normal")
         self.detail.delete("1.0", "end")
