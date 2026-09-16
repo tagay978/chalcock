@@ -367,9 +367,11 @@ class Browser:
 
         wanted = self.only or self.class_var.get()
         self.only = None
-        if self.flagged_only:
+        # --flagged stays on while the class box reads (전체), so switching split keeps the
+        # filter; the flags for one split are useless on another and relaunching for each is
+        # busywork. Picking a class steps out of it, clearing the box steps back in.
+        if self.flagged_only and (not wanted or wanted == "(전체)"):
             flagged = set(self.load_flags())
-            self.flagged_only = False
             self.files = [f for f in everything if f in flagged]
         elif wanted and wanted != "(전체)" and wanted in present:
             self.class_var.set(wanted)
