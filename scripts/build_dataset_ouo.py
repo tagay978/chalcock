@@ -41,6 +41,7 @@ OLD = os.path.join(ROOT, "dataset")
 OUT = os.path.join(ROOT, "dataset_v2")
 IMG_EXT = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 PHASH_MAX = 2
+PHASH_BYTES = 8     # looser picture match allowed when two files are the same length
 IOU_SAME = 0.6
 SAME_RECT = 0.9       # above this two boxes are the same rectangle, not two adjacent bottles
 
@@ -218,6 +219,7 @@ def scan_ouo(skipped, level="brand"):
                     continue
                 records.append({"path": ipath, "stem": stem, "ext": ext.lower(), "boxes": boxes,
                                 "size": size, "phash": ph, "source": "ouo",
+                                "bytes": os.path.getsize(ipath),
                                 "category": cat, "brand": brand,
                                 "md5": hashlib.md5(open(ipath, "rb").read()).hexdigest()})
     return records
@@ -268,12 +270,27 @@ def scan_old(skipped, ouo_names, level="brand"):
                 continue
             records.append({"path": ipath, "stem": stem, "ext": ext.lower(), "boxes": boxes,
                             "size": size, "phash": ph, "source": "old",
+                            "bytes": os.path.getsize(ipath),
                             "category": None, "brand": None,
                             "md5": hashlib.md5(open(ipath, "rb").read()).hexdigest()})
     return records
 
 
 def group(records):
+    """Collapse every copy of a photo into one group.
+
+    Three signals, in order of certainty: the same bytes, the same byte count and a matching
+    picture, then a matching picture alone. The byte count catches a re-save that kept the
+    pixels - Roboflow re-encodes on export, so the MD5 moves but the file length often does
+    not - and the picture match catches the rest.
+
+    An earlier version only compared images whose pHash shared a leading prefix, which is
+    cheap but silently misses pairs that differ in an early bit: 52 duplicate pairs sat in the
+    dataset with 3 of them found. numpy makes the full 3,400x3,400 comparison a second's work,
+    so there is no reason to approximate.
+    """
+    import numpy as np
+
     u = Union()
     by_md5 = defaultdict(list)
     for i, r in enumerate(records):
@@ -283,62 +300,83 @@ def group(records):
         for j in idxs[1:]:
             u.join(idxs[0], j)
 
-    # pHash buckets keep this from being quadratic over 5,000 images.
-    near = 0
-    buckets = defaultdict(list)
-    for i, r in enumerate(records):
-        buckets[str(r["phash"])[:8]].append(i)
-    for idxs in buckets.values():
-        for a in range(len(idxs)):
-            for b in range(a + 1, len(idxs)):
-                i, j = idxs[a], idxs[b]
-                if u.find(i) == u.find(j):
-                    continue
-                if records[i]["phash"] - records[j]["phash"] <= PHASH_MAX:
-                    u.join(i, j)
-                    near += 1
+    n = len(records)
+    h = np.array([int(str(r["phash"]), 16) for r in records], dtype=np.uint64)
+    bits = np.unpackbits(h.view(np.uint8).reshape(n, 8)[:, ::-1], axis=1).astype(np.int8)
+    nbytes = np.array([r["bytes"] for r in records], dtype=np.int64)
+
+    near = same_bytes = 0
+    for i in range(n):
+        if i + 1 >= n:
+            break
+        d = (bits[i + 1:] ^ bits[i]).sum(1)
+        # A shared byte count is strong enough to accept a looser picture match.
+        close = np.nonzero((d <= PHASH_MAX) | ((nbytes[i + 1:] == nbytes[i]) & (d <= PHASH_BYTES)))[0]
+        for off in close:
+            j = i + 1 + int(off)
+            if u.find(i) == u.find(j):
+                continue
+            u.join(i, j)
+            if nbytes[j] == nbytes[i] and d[off] > PHASH_MAX:
+                same_bytes += 1
+            else:
+                near += 1
 
     groups = defaultdict(list)
-    for i in range(len(records)):
+    for i in range(n):
         groups[u.find(i)].append(i)
-    return list(groups.values()), near
+    return list(groups.values()), near, same_bytes
 
 
-def merge_boxes(members, records, dropped=None):
-    """Union the boxes of one photo, discarding rectangles the sources disagree about.
+def merge_boxes(members, records, stats=None):
+    """Union the boxes of one photo, letting the sparsest source settle any disagreement.
 
     ouo_final copies a whole label file between brand folders and relabels every box to that
     folder's brand, so a shelf photo filed under gin, bitters and cointreau arrives with three
-    identical sets of rectangles under three names. Unioning those blindly teaches the model
-    that one bottle is three different things - it accounted for a fifth of all boxes.
+    identical sets of rectangles under three names. The copies are not equally trustworthy: a
+    source that marked two bottles in a shelf of forty was pointing at the two it meant, while
+    one that marked all forty just stamped the folder name over everything. So where the same
+    rectangle carries more than one class, the class from the source with the fewest boxes on
+    that photo wins.
 
-    Where the same rectangle carries more than one class there is no way to tell which source was
-    right, so the whole cluster goes. The bottle becomes unlabelled, which is wrong but far less
-    wrong than three contradictory names.
+    That only works when there is a sparsest source. If the candidates all labelled the photo
+    equally heavily there is nothing to choose between them, and the cluster is dropped - the
+    bottle becomes unlabelled, which is wrong but far less wrong than three contradictory
+    names. Unioning is still the rule for rectangles nobody disputes, so the original case this
+    script was written for - one bottle labelled in its own brand folder and nowhere else -
+    keeps every box.
     """
+    load = {i: len(records[i]["boxes"]) for i in members}
+
     merged = []
     for i in members:
         for box in records[i]["boxes"]:
-            if any(box[0] == m[0] and iou(box, m) > IOU_SAME for m in merged):
+            if any(box[0] == m[0][0] and iou(box, m[0]) > IOU_SAME for m in merged):
                 continue
-            merged.append(box)
+            merged.append((box, i))
 
     clusters = []
-    for box in merged:
+    for box, i in merged:
         for c in clusters:
             if iou(box, c[0][0]) >= SAME_RECT:
-                c.append((box, box[0]))
+                c.append((box, i))
                 break
         else:
-            clusters.append([(box, box[0])])
+            clusters.append([(box, i)])
 
     kept = []
     for c in clusters:
-        if len({name for _, name in c}) > 1:
-            if dropped is not None:
-                dropped[0] += len(c)
+        if len({box[0] for box, _ in c}) == 1:
+            kept.append(c[0][0])
             continue
-        kept.append(c[0][0])
+        best = min(load[i] for _, i in c)
+        winners = {box[0] for box, i in c if load[i] == best}
+        if len(winners) == 1:
+            kept.append(next(box for box, i in c if load[i] == best))
+            if stats is not None:
+                stats["resolved"] += 1
+        elif stats is not None:
+            stats["dropped"] += len(c)
     return kept
 
 
@@ -372,7 +410,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", action="store_true", help="analyse only, write nothing")
     ap.add_argument("--valid-frac", type=float, default=0.2)
-    ap.add_argument("--test-frac", type=float, default=0.1)
+    ap.add_argument("--test-frac", type=float, default=0.05,
+                    help="held back only to sanity-check the finished model; the real "
+                         "measurement is testset/, which is photographed separately")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--level", choices=["brand", "family", "ingredient"], default="brand",
                     help="train on the 113 brands, or on what they pour. Ballantine's 12, Finest "
@@ -439,65 +479,15 @@ def main():
             print(f"  {len(unresolved)} classes fell back to their category: "
                   f"{', '.join(list(unresolved)[:6])}")
 
-    groups, near = group(records)
+    groups, near, same_bytes = group(records)
     from_old = sum(1 for g in groups if all(records[i]["source"] == "old" for i in g))
     mixed = sum(1 for g in groups if len({records[i]["source"] for i in g}) > 1)
-    names = sorted({b[0] for r in records for b in r["boxes"]})
-    print(f"\n{len(groups)} unique photos "
-          f"({len(records) - len(groups)} duplicates collapsed, {near} by pHash)")
+    names = sorted({b[0] for r in records for b in r["boxes"]})   # provisional, pruned below
+    print(f"\n{len(groups)} unique photos ({len(records) - len(groups)} copies collapsed: "
+          f"{near} by picture, {same_bytes} by matching file size)")
     print(f"  photos only the old dataset had: {from_old}")
     print(f"  photos present in both:          {mixed}")
     print(f"  classes: {len(names)}")
-
-    conflict = [0]
-    per_class = Counter(b[0] for g in groups for b in merge_boxes(g, records, conflict))
-    if conflict[0]:
-        print(f"  dropped {conflict[0]} boxes the sources disagreed about "
-              f"(same rectangle, different class)")
-    thin = [f"{c}:{per_class[c]}" for c in names if per_class[c] < 15]
-    print(f"  boxes: {sum(per_class.values())}")
-    if thin:
-        print(f"  under 15 boxes: {', '.join(thin)}")
-
-    if args.report:
-        return
-
-    if os.path.exists(OUT):
-        shutil.rmtree(OUT)
-    for split in ("train", "valid", "test"):
-        for sub in ("images", "labels"):
-            os.makedirs(os.path.join(OUT, split, sub), exist_ok=True)
-
-    # Assign splits per photo, ordered so each class fills valid and test before train takes the
-    # rest; without this the rare classes land entirely in one split.
-    rng = random.Random(args.seed)
-    order = list(range(len(groups)))
-    rng.shuffle(order)
-    rarity = {}
-    for gi in order:
-        boxes = merge_boxes(groups[gi], records)
-        rarity[gi] = min((per_class[b[0]] for b in boxes), default=10**9)
-    order.sort(key=lambda gi: rarity[gi])
-
-    quota = defaultdict(lambda: {"train": 0, "valid": 0, "test": 0})
-    assign = {}
-    for gi in order:
-        boxes = merge_boxes(groups[gi], records)
-        key = min(boxes, key=lambda b: per_class[b[0]])[0] if boxes else "_"
-        # A class with 7 boxes can otherwise land entirely in valid, leaving nothing to train
-        # on; train and valid each get one photo before the fractions apply.
-        if quota[key]["train"] == 0:
-            split = "train"
-        elif quota[key]["valid"] == 0:
-            split = "valid"
-        elif quota[key]["valid"] < per_class[key] * args.valid_frac:
-            split = "valid"
-        elif quota[key]["test"] < per_class[key] * args.test_frac:
-            split = "test"
-        else:
-            split = "train"
-        quota[key][split] += len(boxes)
-        assign[gi] = split
 
     fixes = load_fixes()
     if fixes:
@@ -512,19 +502,21 @@ def main():
             name = to_ingredient(name) or name
         return name
 
+    # Settle every photo's labels before choosing splits. Deciding first and correcting after
+    # would balance the classes as the sources left them, not as they end up.
     cls_id = {n: i for i, n in enumerate(names)}
-    applied, unmapped, empty_dropped = 0, Counter(), 0
-    counts, box_counts = Counter(), Counter()
-    resized = [0]
-    manifest = [("file", "split", "n_boxes", "classes", "sources")]
+    stats = Counter()
+    unmapped = Counter()
+    applied = empty_dropped = 0
+    final = []                       # (group index, representative, boxes)
     for gi, members in enumerate(groups):
-        split = assign[gi]
         rep = min(members, key=lambda i: (records[i]["source"] != "ouo", records[i]["path"]))
         r = records[rep]
-        boxes = merge_boxes(members, records)
         name = f"{r['md5'][:12]}_{sanitize(r['stem'])}"
         ext = ".jpg" if r["ext"] in (".jpg", ".jpeg") else r["ext"]
         fix = fixes.get(name + ext)
+        # Only count a dispute the overlay is not about to settle by hand.
+        boxes = merge_boxes(members, records, None if fix is not None else stats)
         if fix is not None:
             replaced = []
             for cname, x, y, w, h in fix:
@@ -535,13 +527,82 @@ def main():
                     unmapped[cname] += 1
             boxes = replaced
             applied += 1
-
         # A photo with nothing left to label is a photo the annotator threw out - too blurred,
         # too dark, nothing identifiable. Keeping it would only teach the model that bottles
         # are background.
         if not boxes:
             empty_dropped += 1
             continue
+        final.append((gi, r, boxes))
+
+    per_class = Counter(b[0] for _, _, boxes in final for b in boxes)
+    gone = [c for c in names if not per_class[c]]
+    if gone:
+        print(f"  {len(gone)} classes left with no boxes, dropped: {', '.join(gone)}")
+        names = [c for c in names if per_class[c]]
+        cls_id = {n: i for i, n in enumerate(names)}
+    if stats["resolved"]:
+        print(f"  settled {stats['resolved']} disputed rectangles in favour of the source that "
+              f"labelled the photo most sparingly")
+    if stats["dropped"]:
+        print(f"  dropped {stats['dropped']} boxes with no sparsest source to believe")
+    print(f"  photos: {len(final)} ({empty_dropped} dropped for having no usable label)")
+    print(f"  boxes: {sum(per_class.values())}")
+    thin = [f"{c}:{per_class[c]}" for c in names if per_class[c] < 15]
+    if thin:
+        print(f"  under 15 boxes: {', '.join(thin)}")
+
+    if args.report:
+        return
+
+    if os.path.exists(OUT):
+        shutil.rmtree(OUT)
+    for split in ("train", "valid", "test"):
+        for sub in ("images", "labels"):
+            os.makedirs(os.path.join(OUT, split, sub), exist_ok=True)
+
+    # Stratify on the settled labels. A photo carries several classes at once, so no assignment
+    # can hit every target; each photo goes to whichever split is furthest behind on the classes
+    # that photo actually contains, weighted so a rare class outvotes a common one. Rarest first,
+    # because a class with nine boxes has no slack left once the shelf photos have been placed.
+    target = {"train": 1.0 - args.valid_frac - args.test_frac,
+              "valid": args.valid_frac, "test": args.test_frac}
+    rng = random.Random(args.seed)
+    rng.shuffle(final)
+    final.sort(key=lambda t: min(per_class[b[0]] for b in t[2]))
+
+    have = defaultdict(Counter)      # class -> split -> boxes placed so far
+    placed = Counter()
+    assign = {}
+    for gi, r, boxes in final:
+        want = Counter(b[0] for b in boxes)
+        best, best_score = None, None
+        for split in ("train", "valid", "test"):
+            if target[split] <= 0:
+                continue
+            # How short of its target this split is, over the classes in this photo. Dividing by
+            # the class total makes the shortfall a fraction, so a class with 9 boxes and one
+            # with 900 pull with the same strength.
+            score = 0.0
+            for c, k in want.items():
+                total = per_class[c]
+                short = target[split] * total - have[c][split]
+                score += k * short / total
+            score += 1e-6 * (target[split] * len(final) - placed[split])
+            if best_score is None or score > best_score:
+                best, best_score = split, score
+        assign[gi] = best
+        placed[best] += 1
+        for c, k in want.items():
+            have[c][best] += k
+
+    counts, box_counts = Counter(), Counter()
+    resized = [0]
+    manifest = [("file", "split", "n_boxes", "classes", "sources")]
+    for gi, r, boxes in final:
+        split = assign[gi]
+        name = f"{r['md5'][:12]}_{sanitize(r['stem'])}"
+        ext = ".jpg" if r["ext"] in (".jpg", ".jpeg") else r["ext"]
         dest = os.path.join(OUT, split, "images", name + ext)
         with Image.open(r["path"]) as im:
             if max(im.size) > args.max_side:
@@ -559,7 +620,7 @@ def main():
             box_counts[c] += 1
         manifest.append((name + ext, split, len(boxes),
                          "|".join(sorted({c for c, *_ in boxes})),
-                         "|".join(sorted({records[i]["source"] for i in members}))))
+                         "|".join(sorted({records[i]["source"] for i in groups[gi]}))))
 
     with open(os.path.join(OUT, "data.yaml"), "w", encoding="utf-8") as fh:
         yaml.safe_dump({"path": OUT.replace("\\", "/"), "train": "train/images",
@@ -596,6 +657,25 @@ def main():
         print(f"  no category for {len(missing)} classes (from the old set only): "
               f"{', '.join(missing[:8])}")
     print(f"  class_ingredients.yaml written for {len(names)} classes")
+
+    # Balance report: the split percentages mean little on their own, since a photo drags all
+    # its classes into one split. What matters is that no class is missing from train or valid.
+    total = sum(counts.values())
+    print("  share of photos:", ", ".join(
+        f"{s_} {counts[s_] / total:.0%}" for s_ in ("train", "valid", "test")))
+    off = []
+    for c in names:
+        t = box_counts[c]
+        if not t:
+            continue
+        v = have[c]["valid"] / t
+        if have[c]["train"] == 0 or have[c]["valid"] == 0 or abs(v - args.valid_frac) > 0.2:
+            off.append(f"{c} ({have[c]['train']}/{have[c]['valid']}/{have[c]['test']})")
+    if off:
+        print(f"  {len(off)} classes off target (train/valid/test boxes): "
+              + ", ".join(off[:10]) + (" ..." if len(off) > 10 else ""))
+    else:
+        print("  every class sits within 20 points of the valid fraction")
 
 
 if __name__ == "__main__":
