@@ -1,6 +1,6 @@
 # Chalcock — bottle detection for cocktail recommendation
 
-![Chalcock demo: uploading a shelf photo, detecting bottles, and listing makeable cocktails](docs/demo.gif)
+![Chalcock demo: detecting bottles on two real shelf photos, then clicking through to a bottle's info page and a cocktail's recipe page](docs/demo.gif)
 
 Upload a photo of a home bar shelf, get back which bottles it recognises and which of the 102
 official IBA cocktails they can actually make. A YOLO11 detector finds and names the bottles;
@@ -16,6 +16,10 @@ python app/main.py                 # http://127.0.0.1:8000
 
 Test-set photos in `testset/images/` are offered as one-click samples. Clicking a bottle opens
 what it is and what it can make; clicking a cocktail opens its recipe.
+
+Regenerate the gif above with `python scripts/capture_demo_pages.py` (needs the app running and
+`pip install playwright && playwright install chromium`, for real screenshots of the results and
+detail pages) followed by `python scripts/make_demo_video.py`.
 
 ## The model
 

@@ -249,13 +249,48 @@ def card(frames, lines, seconds=3.0):
     fade(frames, frame, 0.5, out=True)
 
 
+def screenshot_card(frames, path, seconds, caption=None):
+    """Show a real screenshot of the running app (not a PIL mockup). A full-page capture is
+    almost always taller than the video frame, so a page that doesn't fit slowly pans top to
+    bottom instead of being squeezed down to illegible size."""
+    shot = Image.open(path).convert("RGB")
+    if shot.width != W:
+        shot = shot.resize((W, int(shot.height * W / shot.width)))
+
+    label_h = 0
+    if caption:
+        label_h = 54
+        strip = Image.new("RGB", (W, label_h), BG)
+        d = ImageDraw.Draw(strip)
+        d.text((24, 15), caption, font=F_BODY, fill=MUTED)
+
+    view_h = H - label_h
+    span = max(0, shot.height - view_h)
+    steps = max(1, int(seconds * FPS))
+
+    def build(i):
+        t = i / max(1, steps - 1)
+        y = int(span * t)
+        crop = shot.crop((0, y, W, y + view_h))
+        frame = blank()
+        frame.paste(crop, (0, label_h))
+        if caption:
+            frame.paste(strip, (0, 0))
+        return frame
+
+    fade(frames, build(0), 0.35)
+    for i in range(steps):
+        write(frames, build(i), 1 / FPS)
+    fade(frames, build(steps - 1), 0.35, out=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--weights", default=os.path.join(
         ROOT, "runs", "yolo11s_v10", "weights", "epoch80.pt"))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
     ap.add_argument("--conf", type=float, default=0.4)
-    ap.add_argument("--n", type=int, default=5, help="how many photos to show")
+    ap.add_argument("--n", type=int, default=2, help="how many photos to show")
     ap.add_argument("--two-stage", dest="two_stage", action="store_true", default=False,
                     help="crop each COCO-proposed bottle before naming it, instead of running "
                          "the brand model on the full photo")
@@ -284,11 +319,27 @@ def main():
         ("YOLO11 bottle detection  ·  IBA 102 cocktails", F_SMALL, MUTED),
     ], 2.2)
 
+    # Real screenshots of the web app (scripts/capture_demo_pages.py) shown after the matching
+    # photo's detection segment, so the video proves the pages exist rather than just the model.
+    pages_dir = os.path.join(ROOT, "samples", "_pages")
+    screenshots = {
+        "1.jpeg": [("demo_results_1.png", "실제 웹 페이지 — 검출 결과"),
+                  ("demo_bottle.png", "병 클릭 → 술 정보 페이지"),
+                  ("demo_cocktail.png", "칵테일 클릭 → 레시피 페이지")],
+        "6.jpg": [("demo_results_2.png", "실제 웹 페이지 — 검출 결과")],
+    }
+
     total_named = 0
     for i, fn in enumerate(picked, 1):
         print(f"  rendering {i}/{len(picked)}: {fn}")
         total_named += segment(frames, os.path.join(TESTSET, fn), brand, coco, args.conf, rules,
                                recipes, i, len(picked), args.two_stage)
+        for shot_name, caption in screenshots.get(fn, []):
+            shot_path = os.path.join(pages_dir, shot_name)
+            if not os.path.exists(shot_path):
+                print(f"  (skipping {shot_name} - run scripts/capture_demo_pages.py first)")
+                continue
+            screenshot_card(frames, shot_path, 2.6, caption)
 
     # No hand-labelled ground truth for the current testset yet (it was just replaced with fresh
     # shelf photos - see git log), so this closes on what the run actually did, not a number that
