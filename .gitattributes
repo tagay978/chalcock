@@ -1,8 +1,0 @@
-# Keep dataset files byte-exact: label text is parsed by line and images are binary.
-finalloopy/** -text
-*.jpg binary
-*.jpeg binary
-*.png binary
-*.pt binary
-
-* text=auto eol=lf
