@@ -52,6 +52,7 @@ SELECT = "#ffffff"
 
 # Newest and richest first, so the viewer does not open on the 50-class set that predates
 # ouo_final and lacks most brands. Anything not listed follows in name order.
+ALL = "(전체)"
 PREFERRED = ["dataset_v2", "dataset_fam", "dataset_ing", "testset", "dataset_todo"]
 
 
@@ -102,6 +103,7 @@ class Browser:
         self.start = start
         self.index = 0
         self.files = []
+        self.split_of = {}       # image stem -> the split it lives in
         self.boxes = []          # [cid, x, y, w, h] in normalised coords, edited in place
         self.selected = None
         self.dirty = False
@@ -219,15 +221,30 @@ class Browser:
 
     def reload_splits(self):
         _, _, splits = self.current_set()
-        self.split_box["values"] = splits
-        if self.split_var.get() not in splits:
-            self.split_var.set(splits[0])
+        choices = ([ALL] + splits) if len(splits) > 1 else splits
+        self.split_box["values"] = choices
+        if self.split_var.get() not in choices:
+            self.split_var.set(choices[0])
 
-    def dirs(self):
+    def chosen_splits(self):
+        _, _, splits = self.current_set()
+        return splits if self.split_var.get() == ALL else [self.split_var.get()]
+
+    def split_dirs(self, split):
         _, path, _ = self.current_set()
-        split = self.split_var.get()
         base = path if split == "." else os.path.join(path, split)
         return os.path.join(base, "images"), os.path.join(base, "labels")
+
+    def dirs_for(self, stem):
+        """Which split a photo sits in is an accident of the build, not something worth paging
+        through three times. Filenames carry an md5 prefix and are unique across the dataset, so
+        one map from stem to split is enough to read and write each label where it belongs."""
+        return self.split_dirs(self.split_of.get(stem) or self.chosen_splits()[0])
+
+    def dirs(self):
+        if self.files:
+            return self.dirs_for(os.path.splitext(self.files[self.index])[0])
+        return self.split_dirs(self.chosen_splits()[0])
 
     def names(self):
         _, path, _ = self.current_set()
@@ -246,7 +263,7 @@ class Browser:
         each of them by hand is pointless work: keep one and remember the names it carried, so
         renaming it is the only thing left to do.
         """
-        _, ldir = self.dirs()
+        _, ldir = self.dirs_for(stem)
         path = os.path.join(ldir, stem + ".txt")
         out = []
         if not os.path.exists(path):
@@ -280,9 +297,9 @@ class Browser:
     def save(self):
         if not self.files:
             return
-        _, ldir = self.dirs()
         fn = self.files[self.index]
         stem = os.path.splitext(fn)[0]
+        _, ldir = self.dirs_for(stem)
         names = self.names()
         with open(os.path.join(ldir, stem + ".txt"), "w", encoding="utf-8") as fh:
             for cid, x, y, w, h in self.boxes:
@@ -316,7 +333,9 @@ class Browser:
             writer = csv.DictWriter(fh, fieldnames=["file", "split", "note"])
             writer.writeheader()
             for fn, note in sorted(flags.items()):
-                writer.writerow({"file": fn, "split": self.split_var.get(), "note": note})
+                writer.writerow({"file": fn,
+                                 "split": self.split_of.get(os.path.splitext(fn)[0], ""),
+                                 "note": note})
 
     def toggle_flag(self):
         if not self.files:
@@ -352,10 +371,17 @@ class Browser:
     def reload_files(self):
         if not self.may_leave():
             return
-        idir, _ = self.dirs()
         names = self.names()
-        everything = sorted(f for f in os.listdir(idir)
-                            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")))
+        self.split_of = {}
+        everything = []
+        for split in self.chosen_splits():
+            idir, _ = self.split_dirs(split)
+            for f in sorted(os.listdir(idir)):
+                if not f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    continue
+                everything.append(f)
+                self.split_of[os.path.splitext(f)[0]] = split
+        everything.sort()
 
         present = sorted({names[c] for f in everything
                           for c, *_ in self.read_boxes(os.path.splitext(f)[0])
@@ -499,7 +525,7 @@ class Browser:
             return
 
         fn = self.files[self.index]
-        idir, _ = self.dirs()
+        idir, _ = self.dirs_for(os.path.splitext(fn)[0])
         names = self.names()
         image = Image.open(os.path.join(idir, fn)).convert("RGB")
         self.img_w, self.img_h = image.size
@@ -536,7 +562,8 @@ class Browser:
                              fg=ACCENT if flagged else TEXT)
         self.save_btn.config(fg=ACCENT if self.dirty else TEXT)
         self.title.config(
-            text=f"{fn}\n{self.img_w}x{self.img_h} · 박스 {len(self.boxes)}개"
+            text=f"{fn}\n{self.split_of.get(os.path.splitext(fn)[0], '?')} · "
+                 f"{self.img_w}x{self.img_h} · 박스 {len(self.boxes)}개"
                  + (f"  · 겹친 박스 {self.collapsed}개 합침" if self.collapsed else "")
                  + ("  · 수정됨" if self.dirty else "")
                  + ("  · 저장된 수정" if fixed and not self.dirty else "")
