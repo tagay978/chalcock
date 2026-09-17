@@ -1,0 +1,106 @@
+# Short, human-written blurbs for the bottle info page - one entry per canonical
+# ingredient key from data/ingredient_rules.yaml / data/bottles.yaml. `category` is
+# the display group; `blurb` is 1-2 sentences, no recipe data (that lives in
+# data/iba_cocktails.json and is looked up separately by ingredient).
+#
+# Anything detected but missing here just gets a generic sentence built from its key
+# (see app/main.py:ingredient_info) - this file only needs the common cases.
+
+ingredients:
+  gin:                 {category: "진",       blurb: "주니퍼베리(노간주나무 열매)로 향을 낸 증류주. 런던 드라이 진이 표준형이며, 마티니·김렛처럼 향이 그대로 드러나는 칵테일의 뼈대가 된다."}
+  old_tom_gin:          {category: "진",       blurb: "런던 드라이 진보다 단맛을 더한 옛 스타일의 진. 마티네즈, 톰 콜린스 같은 클래식 레시피에 쓰인다."}
+  sloe_gin:              {category: "리큐어",   blurb: "진에 슬로베리(야생 자두)를 침출해 만든 붉은빛 리큐어. 도수는 낮고 새콤달콤해 진 자체보다는 리큐어로 분류된다."}
+  vodka:                {category: "보드카",   blurb: "곡물이나 감자를 발효·증류해 만든, 향이 거의 없는 증류주. 다른 재료의 맛을 가리지 않아 칵테일 베이스로 폭넓게 쓰인다."}
+  citron_vodka:          {category: "보드카",   blurb: "레몬 향을 더한 보드카. 코스모폴리탄 계열처럼 산뜻한 시트러스 향이 필요한 칵테일에 어울린다."}
+  vanilla_vodka:         {category: "보드카",   blurb: "바닐라 향을 더한 보드카. 디저트 느낌의 달콤한 칵테일에 쓰인다."}
+  bourbon:              {category: "위스키",   blurb: "미국산 옥수수 위스키. 새 탄화 오크통 숙성에서 나오는 바닐라·카라멜 풍미가 특징이며 올드 패션드, 위스키 사워의 기본이 된다."}
+  rye:                  {category: "위스키",   blurb: "호밀을 주原료로 쓰는 미국식 위스키. 버번보다 스파이시하고 드라이해 맨해튼·사제락에 자주 쓰인다."}
+  bourbon_or_rye:        {category: "위스키",   blurb: "버번 또는 라이 위스키 어느 쪽으로도 만들 수 있는 레시피에 쓰는 표기."}
+  scotch:               {category: "위스키",   blurb: "스코틀랜드에서 최소 3년 숙성한 위스키. 몰트와 그레인을 섞은 블렌디드 스카치가 대부분이며 부드럽고 스모키한 개체도 있다."}
+  islay_scotch:          {category: "위스키",   blurb: "스코틀랜드 아일라섬에서 만든 스카치. 피트(이탄) 향이 강해 스모키하고 약품 같은 풍미가 두드러진다."}
+  irish_whiskey:         {category: "위스키",   blurb: "아일랜드산 위스키. 대개 3회 증류를 거쳐 스카치보다 가볍고 부드러운 편이다."}
+  irish_cream:           {category: "리큐어",   blurb: "아이리시 위스키에 크림을 더한 리큐어. 부드럽고 달아 커피 칵테일이나 그대로 마시기 좋다."}
+  cognac:               {category: "브랜디",   blurb: "프랑스 코냑 지역에서 만든 포도 브랜디. VS·VSOP·XO 순으로 숙성 기간이 길어지며 사이드카, 브랜디 크러스타의 베이스다."}
+  brandy:               {category: "브랜디",   blurb: "포도(또는 과일)를 증류한 술의 총칭. 코냑은 브랜디의 한 지역 등급이다."}
+  calvados:             {category: "브랜디",   blurb: "프랑스 노르망디산 사과 브랜디. 사과향이 강하고 가을 느낌의 칵테일에 어울린다."}
+  apricot_brandy:        {category: "리큐어",   blurb: "살구를 원료로 한 브랜디 리큐어. 은은한 단맛과 살구향으로 클래식 칵테일에 소량 쓰인다."}
+  peach_brandy:          {category: "리큐어",   blurb: "복숭아 브랜디 리큐어. 살구 브랜디와 비슷하게 소량으로 향을 더하는 용도다."}
+  cherry_brandy:         {category: "리큐어",   blurb: "체리를 원료로 한 브랜디 리큐어. 진한 체리향과 붉은 색이 특징이다."}
+  tequila:              {category: "테킬라",   blurb: "블루 아가베를 증류한 멕시코 증류주. 블랑코(무숙성)와 레포사도(단기 숙성)가 마르가리타 등에 흔히 쓰인다."}
+  mezcal:               {category: "메즈칼",   blurb: "아가베를 화덕에 구워 만드는 멕시코 증류주. 테킬라의 사촌 격으로 스모키한 향이 특징이다."}
+  cachaca:              {category: "카샤사",   blurb: "브라질산 사탕수수 증류주. 카이피리냐의 베이스로, 럼과 비슷하지만 당밀이 아닌 생사탕수수즙으로 만든다."}
+  pisco:                {category: "피스코",   blurb: "페루·칠레의 포도 증류 브랜디. 피스코 사워의 베이스다."}
+  aguardiente:          {category: "증류주",   blurb: "사탕수수나 과일로 만드는 라틴아메리카의 투명 증류주 총칭."}
+  grappa:               {category: "그라파",   blurb: "포도를 압착하고 남은 찌꺼기(포마스)를 증류한 이탈리아 술. 거칠고 강한 풍미가 특징이다."}
+  rum:                  {category: "럼",       blurb: "사탕수수나 당밀을 발효·증류한 술. 숙성 정도와 색에 따라 화이트/골드/다크로 나뉜다."}
+  white_rum:            {category: "럼",       blurb: "숙성을 거의 하지 않은 투명한 럼. 다이키리, 모히토처럼 깔끔한 단맛이 필요한 칵테일에 쓰인다."}
+  gold_rum:             {category: "럼",       blurb: "짧게 숙성해 옅은 금빛을 띠는 럼. 화이트보다 풍미가 살짝 진하다."}
+  dark_rum:             {category: "럼",       blurb: "오래 숙성하거나 카라멜을 더해 색이 진한 럼. 카라멜·당밀 풍미가 강해 다크 앤 스토미 같은 칵테일에 쓰인다."}
+  aged_rum:             {category: "럼",       blurb: "오크통에서 수년 숙성한 럼. 바닐라·오크 풍미가 있어 스트레이트로도 즐기고 마이타이 같은 티키 칵테일에도 쓰인다."}
+  spiced_rum:            {category: "럼",       blurb: "바닐라·시나몬 등 향신료를 더한 럼. 달콤하고 향신료 풍미가 두드러진다."}
+  coconut_rum:           {category: "럼",       blurb: "코코넛 향을 더한 럼 리큐어. 피나 콜라다 같은 트로피컬 칵테일의 단맛과 향을 담당한다."}
+  demerara_rum:          {category: "럼",       blurb: "가이아나 데메라라 사탕수수로 만든 진한 풍미의 다크 럼."}
+  jamaican_rum:          {category: "럼",       blurb: "자메이카산 럼. 발효 향이 강하고 펑키한 풍미로 유명하다."}
+  goslings_rum:          {category: "럼",       blurb: "버뮤다산 블랙 시일 럼 브랜드. 다크 앤 스토미의 표준 재료다."}
+  overproof_rum:         {category: "럼",       blurb: "알코올 도수가 일반 럼보다 훨씬 높은(대개 57% 이상) 럼. 조니 개운 같은 티키 칵테일에 소량으로 강한 인상을 준다."}
+  blackstrap_rum:        {category: "럼",       blurb: "정제도가 낮은 당밀로 만든, 색이 매우 진하고 풍미가 강한 럼."}
+  rhum_agricole:         {category: "럼",       blurb: "당밀이 아닌 생사탕수수즙으로 만드는 마르티니크식 럼. 풀향이 살아있는 개성적인 스타일이다."}
+  amaretto:             {category: "리큐어",   blurb: "아몬드(또는 살구씨) 향의 이탈리아 리큐어. 달콤하고 고소해 아마레토 사워 등에 쓰인다."}
+  amaro:                {category: "아마로",   blurb: "허브·뿌리·나무껍질을 우려낸 이탈리아식 쓴맛 리큐어. 식후주로도, 칵테일의 쓴맛 층으로도 쓰인다."}
+  campari:              {category: "아마로",   blurb: "선명한 붉은색의 이탈리아 비터 리큐어. 네그로니·아메리카노의 핵심 재료로, 오렌지 껍질 특유의 쌉쌀한 향이 특징이다."}
+  aperol:               {category: "아마로",   blurb: "캄파리보다 가볍고 단맛이 있는 오렌지색 이탈리아 아페리티프. 아페롤 스프리츠로 유명하다."}
+  cynar:                {category: "아마로",   blurb: "아티초크를 주원료로 한 이탈리아 비터 리큐어. 독특한 쌉쌀함과 채소향이 있다."}
+  fernet:               {category: "아마로",   blurb: "박하·사프란 등이 들어간 강렬하고 쓴 이탈리아 아마로. 헤밍웨이 스페셜 등에 소량 쓰인다."}
+  absinthe:             {category: "리큐어",   blurb: "아니스·향쑥으로 만드는 고도수 증류주. 향만 남기고 대부분 헹궈내는 '린스' 방식으로 사제락 등에 쓰인다."}
+  pernod:               {category: "리큐어",   blurb: "아니스 향이 강한 프랑스 리큐어. 압생트의 대체재로도 쓰인다."}
+  jagermeister:          {category: "리큐어",   blurb: "56가지 허브·향신료를 배합한 독일산 비터 리큐어. 진한 약초향과 단맛이 특징이다."}
+  benedictine:           {category: "리큐어",   blurb: "27가지 허브와 향신료로 만드는 프랑스 수도원 기원의 리큐어. 꿀처럼 진한 단맛과 허브향이 있다."}
+  drambuie:             {category: "리큐어",   blurb: "스카치 위스키에 꿀과 허브를 더한 스코틀랜드산 리큐어. 러스티 네일의 재료다."}
+  becherovka:            {category: "리큐어",   blurb: "체코산 허브 리큐어. 시나몬·정향 풍미가 뚜렷한 쌉쌀달콤한 술이다."}
+  galliano:             {category: "리큐어",   blurb: "바닐라와 아니스 계열 허브가 어우러진 노란색 이탈리아 리큐어. 하비 월뱅어의 재료로 알려져 있다."}
+  herbal_liqueur:        {category: "리큐어",   blurb: "허브와 향신료를 침출해 만든 리큐어. 브랜드마다 배합이 달라 풍미 개성이 강한 편이다."}
+  coca_leaf_liqueur:      {category: "리큐어",   blurb: "코카잎 등 안데스 허브로 향을 낸 남미산 허브 리큐어."}
+  coffee_liqueur:        {category: "리큐어",   blurb: "커피로 향을 낸 리큐어. 에스프레소 마티니, 블랙 러시안의 핵심 재료다."}
+  triple_sec:           {category: "리큐어",   blurb: "오렌지 껍질로 향을 낸 투명한 큐라소 계열 리큐어. 마가리타·코스모폴리탄처럼 오렌지 리큐어가 들어가는 대부분의 클래식에 쓰인다."}
+  cointreau:            {category: "리큐어",   blurb: "프랑스산 프리미엄 트리플 섹. 오렌지 향이 깨끗하고 진해 트리플 섹의 대표 브랜드로 통한다."}
+  curacao:              {category: "리큐어",   blurb: "카리브해 퀴라소섬의 쓴 오렌지로 향을 낸 리큐어. 투명한 것부터 블루 큐라소까지 색이 다양하다."}
+  grand_marnier:         {category: "리큐어",   blurb: "코냑에 오렌지 리큐어를 블렌딩한 프랑스산 리큐어. 트리플 섹보다 묵직하고 코냑의 깊이가 있다."}
+  limoncello:           {category: "리큐어",   blurb: "레몬 껍질을 침출해 만드는 이탈리아 레몬 리큐어. 상큼하고 달아 시트러스향 칵테일에 쓰인다."}
+  maraschino:           {category: "리큐어",   blurb: "마라스카 체리로 만드는 투명한 체리 리큐어. 라스트 워드, 애비에이션의 특유의 쌉쌀달콤한 노트를 담당한다."}
+  chartreuse_green:      {category: "리큐어",   blurb: "130여 가지 허브를 우려 만드는 프랑스 수도원 리큐어. 초록색이 알코올 도수가 더 높고 허브향이 강하다."}
+  chartreuse_yellow:     {category: "리큐어",   blurb: "샤르트뢰즈의 순한 버전. 꿀처럼 달고 초록보다 부드럽다."}
+  creme_de_cassis:       {category: "리큐어",   blurb: "블랙커런트로 만드는 진한 자주색 프랑스 리큐어. 키르 로얄에 쓰인다."}
+  creme_de_cacao_white:  {category: "리큐어",   blurb: "카카오로 향을 낸 투명한 리큐어. 초콜릿 향이 은은해 그래스호퍼 등에 쓰인다."}
+  creme_de_cacao_brown:  {category: "리큐어",   blurb: "카카오 리큐어의 짙은 색 버전. 화이트보다 초콜릿 풍미가 진하다."}
+  creme_de_menthe_green:  {category: "리큐어",   blurb: "박하로 향을 낸 초록색 리큐어. 시원한 민트향이 그래스호퍼 등에 색과 향을 더한다."}
+  creme_de_menthe_white:  {category: "리큐어",   blurb: "민트 리큐어의 투명한 버전. 색만 없을 뿐 향은 초록색과 같다."}
+  creme_de_violette:     {category: "리큐어",   blurb: "제비꽃으로 향을 낸 보라색 리큐어. 오로라 색을 내는 에이비에이션에 쓰인다."}
+  creme_de_mure:         {category: "리큐어",   blurb: "블랙베리로 만드는 진한 보라색 리큐어."}
+  creme_de_banane:       {category: "리큐어",   blurb: "바나나로 향을 낸 노란색 리큐어. 트로피컬한 단맛과 향을 더한다."}
+  raspberry_liqueur:     {category: "리큐어",   blurb: "라즈베리로 만드는 붉은 리큐어. 새콤달콤한 베리향을 더한다."}
+  passion_fruit_liqueur: {category: "리큐어",   blurb: "패션프루트로 만드는 트로피컬 리큐어."}
+  peach_schnapps:        {category: "리큐어",   blurb: "복숭아 향의 슈납스 리큐어. 섹스 온 더 비치 등에 단맛과 향을 더한다."}
+  melon_liqueur:         {category: "리큐어",   blurb: "머스크멜론 향의 연두색 리큐어. 대표 브랜드 미도리로 잘 알려져 있다."}
+  lychee_liqueur:        {category: "리큐어",   blurb: "리치 열매로 만드는 달콤한 아시아풍 리큐어."}
+  pomegranate_liqueur:   {category: "리큐어",   blurb: "석류로 만드는 새콤달콤한 리큐어."}
+  apple_liqueur:         {category: "리큐어",   blurb: "사과 향의 새콤달콤한 리큐어. 그린 애플 계열이 특히 흔하다."}
+  fruit_liqueur:         {category: "리큐어",   blurb: "여러 과일을 배합해 만드는 트로피컬 리큐어."}
+  cinnamon_whisky:       {category: "리큐어",   blurb: "위스키에 시나몬 향을 강하게 더한 리큐어. 스트레이트 샷으로 즐기는 경우가 많다."}
+  southern_comfort:      {category: "리큐어",   blurb: "복숭아 등 과일향을 더한 미국산 위스키 리큐어."}
+  elderflower_liqueur:   {category: "리큐어",   blurb: "엘더플라워(서양딱총나무꽃)로 향을 낸 리큐어. 은은한 꽃향이 특징이다."}
+  sambuca:              {category: "리큐어",   blurb: "아니스 향이 강한 이탈리아 리큐어. 원두 세 알을 띄워 마시는 전통(콘 라 모스카)으로도 알려져 있다."}
+  liqueur:              {category: "리큐어",   blurb: "허브·과일·향신료 등으로 향과 단맛을 더한 술의 총칭."}
+  sweet_vermouth:        {category: "베르무트", blurb: "와인에 허브와 향신료를 더하고 살짝 단맛을 낸 주정강화 와인. 마티니 로소가 대표적이며 맨해튼·네그로니의 필수 재료다."}
+  dry_vermouth:          {category: "베르무트", blurb: "허브향의 드라이한 주정강화 와인. 드라이 마티니의 핵심 재료다."}
+  lillet_blanc:          {category: "베르무트", blurb: "와인에 리큐어와 키니네를 더한 프랑스산 아페리티프 와인."}
+  angostura_bitters:      {category: "비터스",   blurb: "정향·용담뿌리 등을 배합한 대표적인 방향성 비터스. 몇 방울만으로 칵테일에 깊이와 향신료 뉘앙스를 더한다."}
+  orange_bitters:        {category: "비터스",   blurb: "오렌지 껍질 향이 나는 비터스. 마티니 계열에 흔히 몇 방울 더한다."}
+  peychauds_bitters:      {category: "비터스",   blurb: "아니스와 체리향이 도는 뉴올리언스산 비터스. 사제락의 시그니처 재료다."}
+  port:                 {category: "주정강화 와인", blurb: "포르투갈산 주정강화 와인. 달고 진한 편이다."}
+  sherry_amontillado:     {category: "주정강화 와인", blurb: "산화 숙성을 거쳐 견과류 향이 나는 스페인 셰리."}
+  sherry_palo_cortado:    {category: "주정강화 와인", blurb: "피노와 올로로소의 특징을 함께 지닌 희귀한 스타일의 셰리."}
+  prosecco:             {category: "스파클링 와인", blurb: "이탈리아산 스파클링 화이트 와인. 스프리츠·벨리니에 쓰인다."}
+  champagne:            {category: "스파클링 와인", blurb: "프랑스 샹파뉴 지역의 스파클링 와인."}
+  sparkling_wine:        {category: "스파클링 와인", blurb: "탄산을 머금은 발포성 와인의 총칭."}
+  red_wine:             {category: "와인",     blurb: "적포도로 만드는 와인."}
+  white_wine:           {category: "와인",     blurb: "청포도(또는 껍질을 제거한 포도)로 만드는 와인."}

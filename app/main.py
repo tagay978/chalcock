@@ -17,6 +17,7 @@ import sys
 
 from collections import OrderedDict
 
+import yaml
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,7 +35,9 @@ COCO_BOTTLE = 39
 # another bottle.
 PAD = 0.0
 NAMED = (34, 197, 94)
-DECLINED = (100, 116, 139)
+# yolo11s_v10/epoch80 at conf 0.4, picked by eye against real shelf photos - see the weights
+# default in main() below for which checkpoint this pairs with.
+DEFAULT_CONF = 0.4
 
 app = FastAPI(title="Cocktail bottle detector")
 state: dict = {}
@@ -119,20 +122,29 @@ def load_models(weights: str, coco_weights: str):
     state["rules"] = R.Rules()
     state["recipes"] = R.json.load(
         open(os.path.join(ROOT, "data", "iba_cocktails.json"), encoding="utf-8"))["cocktails"]
-    state["photos"] = load_photo_credits()
+    state["recipes_by_slug"] = {c["slug"]: c for c in state["recipes"]}
+    state["photos"] = load_credits("cocktails")
+    state["ingredient_photos"] = load_credits("ingredients")
+    state["bottle_photos"] = load_bottle_photos()
+    state["ingredient_info"] = yaml.safe_load(
+        open(os.path.join(ROOT, "data", "ingredient_info.yaml"), encoding="utf-8"))["ingredients"]
 
     rel = os.path.relpath(weights, os.path.join(ROOT, "runs")).replace("\\", "/")
     parts = rel.split("/")
     state["default_key"] = f"{parts[0]}/{os.path.splitext(parts[-1])[0]}"
-    print(f"cocktail photos: {len(state['photos'])}")
+    print(f"cocktail photos: {len(state['photos'])}, ingredient photos: {len(state['ingredient_photos'])}")
     print(f"checkpoints available: {len(discover_models())}")
     if get_model(state["default_key"]) is None:
         raise SystemExit(f"could not load {state['default_key']}")
 
 
-def load_photo_credits():
-    """slug -> photo path and the credit its licence requires, from fetch_cocktail_images.py."""
-    path = os.path.join(STATIC, "cocktails", "attribution.csv")
+def load_credits(subdir: str):
+    """slug -> photo path and the credit its licence requires.
+
+    Shared by fetch_cocktail_images.py's output (app/static/cocktails) and
+    fetch_ingredient_images.py's (app/static/ingredients) - same manifest shape, same policy.
+    """
+    path = os.path.join(STATIC, subdir, "attribution.csv")
     if not os.path.exists(path):
         return {}
     import csv
@@ -140,15 +152,69 @@ def load_photo_credits():
     out = {}
     with open(path, encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh):
-            if os.path.exists(os.path.join(STATIC, "cocktails", row["file"])):
+            if os.path.exists(os.path.join(STATIC, subdir, row["file"])):
                 out[row["slug"]] = {
-                    "src": f"/static/cocktails/{row['file']}",
+                    "src": f"/static/{subdir}/{row['file']}",
                     "creator": row.get("creator") or "unknown",
                     "license": row.get("license") or "",
                     "license_url": row.get("license_url") or "",
                     "landing_url": row.get("landing_url") or "",
                 }
     return out
+
+
+def load_bottle_photos():
+    """class name -> thumbnail URL, from scripts/build_bottle_thumbs.py's output."""
+    d = os.path.join(STATIC, "bottles")
+    if not os.path.isdir(d):
+        return {}
+    return {R.canon(os.path.splitext(fn)[0]): f"/static/bottles/{fn}"
+            for fn in os.listdir(d) if fn.lower().endswith((".jpg", ".jpeg", ".png"))}
+
+
+def bottle_photo(cls: str):
+    return state["bottle_photos"].get(R.canon(cls))
+
+
+def crop_data_uri(image: Image.Image, box, pad: float = 0.06) -> str:
+    """The bottle exactly as it appeared in this shelf, not a generic stock shot - so the
+    'identified bottles' list reads as a receipt of what was found, not a product catalogue."""
+    W, H = image.size
+    x1, y1, x2, y2 = box
+    px, py = (x2 - x1) * pad, (y2 - y1) * pad
+    crop = image.crop((max(0, int(x1 - px)), max(0, int(y1 - py)),
+                       min(W, int(x2 + px)), min(H, int(y2 + py))))
+    buf = io.BytesIO()
+    crop.save(buf, format="JPEG", quality=85)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def ingredient_info(key: str):
+    """Category + blurb for a canonical ingredient key, with a generic fallback."""
+    info = state["ingredient_info"].get(key)
+    if info:
+        return info
+    return {"category": "재료", "blurb": f"{key.replace('_', ' ')} 계열의 재료입니다."}
+
+
+def cocktails_using(ingredient: str):
+    """Every IBA cocktail this ingredient can help make, direct match first."""
+    rules, recipes = state["rules"], state["recipes"]
+    direct, sub = [], []
+    for c in recipes:
+        bar, _, _ = R.recipe_requirements(c, rules)
+        for key, _line in bar:
+            if key == ingredient:
+                direct.append(c)
+                break
+            if ingredient in rules.equivalents.get(key, ()) or ingredient in rules.substitutes.get(key, ()):
+                sub.append(c)
+                break
+    entry = lambda c: {"name": c["name"], "slug": c["slug"], "category": c["category"],
+                       "photo": state["photos"].get(c["slug"])}
+    seen = {c["slug"] for c in direct}
+    return ([entry(c) for c in sorted(direct, key=lambda c: c["name"])],
+            [entry(c) for c in sorted(sub, key=lambda c: c["name"]) if c["slug"] not in seen])
 
 
 def font(size):
@@ -182,7 +248,7 @@ def analyse(image: Image.Image, conf: float, two_stage: bool = True, model=None)
                     declined += 1
                     continue
                 detected.append({"cls": name, "conf": round(float(score), 3), "box": box})
-        return draw(image, boxes, detected, rules), detected, declined, len(boxes)
+        return draw(image, detected, rules), detected, declined, len(boxes)
 
     crops, boxes = [], []
     for r in coco.predict(image, conf=0.25, verbose=False):
@@ -212,20 +278,20 @@ def analyse(image: Image.Image, conf: float, two_stage: bool = True, model=None)
                 continue
             detected.append({"cls": name, "conf": round(float(r.boxes.conf[best]), 3),
                              "box": boxes[i + j]})
-    return draw(image, boxes, detected, rules), detected, declined, len(boxes)
+    return draw(image, detected, rules), detected, declined, len(boxes)
 
 
-def draw(image, boxes, detected, rules):
+def draw(image, detected, rules):
+    """Draw a box only for bottles the model actually named - an unlabeled box (the model saw
+    a bottle but wouldn't commit to a brand) would just read as visual noise to someone who
+    isn't debugging the detector."""
     W = image.width
 
     canvas = image.copy()
     pen = ImageDraw.Draw(canvas)
     label_font = font(max(14, W // 60))
-    for box in boxes:
-        hit = next((d for d in detected if d["box"] == box), None)
-        if hit is None:
-            pen.rectangle(box, outline=DECLINED, width=2)
-            continue
+    for hit in detected:
+        box = hit["box"]
         label = rules.bottle(hit["cls"]).get("label", hit["cls"])
         text = f"{label} {hit['conf']:.2f}"
         pen.rectangle(box, outline=NAMED, width=max(3, W // 300))
@@ -319,7 +385,7 @@ def sample(name: str):
 
 @app.post("/api/detect")
 async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = False,
-                 two_stage: bool = True, model: str = ""):
+                 two_stage: bool = False, model: str = ""):
     meta = get_model(model or state["default_key"])
     if meta is None:
         return JSONResponse({"error": f"no such checkpoint: {model}"}, status_code=400)
@@ -333,8 +399,7 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
     if max(image.size) > 1600:            # keep inference and the response payload sane
         image.thumbnail((1600, 1600))
 
-    canvas, detected, declined, total = analyse(image, conf or meta["default_conf"],
-                                               two_stage, meta)
+    canvas, detected, declined, total = analyse(image, conf or DEFAULT_CONF, two_stage, meta)
     classes = [d["cls"] for d in detected]
     have, makeable, nearly = match_cocktails(classes, loose)
 
@@ -351,6 +416,8 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
         bottles.append({"cls": d["cls"],
                         "label": entry.get("label", d["cls"]),
                         "ingredient": entry.get("ingredient", "?"),
+                        "photo": bottle_photo(d["cls"]),
+                        "crop": crop_data_uri(image, d["box"]),
                         "conf": d["conf"]})
 
     return {
@@ -371,12 +438,55 @@ async def detect(file: UploadFile = File(...), conf: float = 0.0, loose: bool = 
     }
 
 
+@app.get("/api/bottle/{cls}")
+def bottle_detail(cls: str):
+    rules = state["rules"]
+    entry = rules.bottle(cls)
+    if not entry:
+        return JSONResponse({"error": f"unknown bottle class: {cls}"}, status_code=404)
+    ingredient = entry.get("ingredient", "")
+    info = ingredient_info(ingredient)
+    direct, sub = cocktails_using(ingredient)
+
+    photo, credit = bottle_photo(cls), None
+    if photo is None:
+        # No brand-specific crop (a generic ingredient page, e.g. reached from a recipe's
+        # "45 ml Gin" rather than a detected bottle) - fall back to a licensed stock photo,
+        # which needs the credit a brand crop from our own training data does not.
+        fallback = state["ingredient_photos"].get(ingredient)
+        if fallback:
+            photo, credit = fallback["src"], fallback
+
+    return {"cls": cls, "label": entry.get("label", cls), "ingredient": ingredient,
+            "category": info["category"], "blurb": info["blurb"],
+            "photo": photo, "credit": credit, "cocktails": direct, "cocktails_sub": sub}
+
+
+@app.get("/api/cocktail/{slug}")
+def cocktail_detail(slug: str):
+    c = state["recipes_by_slug"].get(slug)
+    if c is None:
+        return JSONResponse({"error": f"unknown cocktail: {slug}"}, status_code=404)
+    rules = state["rules"]
+    ingredients = []
+    for line in c["ingredients"]:
+        key, _ = rules.normalize(line)
+        bottle_key = key if key and key not in rules.pantry else None
+        ingredients.append({"text": line, "key": bottle_key})
+    return {"name": c["name"], "slug": c["slug"], "category": c["category"],
+            "ingredients": ingredients, "method": c["method"], "garnish": c["garnish"],
+            "url": c["url"], "photo": state["photos"].get(c["slug"])}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    # Newest usable run first. The 51-class abstain model is deliberately not in this list:
-    # it measured worse on real photos, for the reason the README records.
-    default = next((p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
-                                for r in ("yolo11s_ing", "yolo11s_v3", "yolo11s_v2", "yolo11s"))
+    # yolo11s_v10/epoch80 chosen by eye over best.pt: at conf 0.4 it reads shelves better than
+    # the run's own best-mAP checkpoint does. Falls back down the list if that file is missing.
+    default = next((p for p in (
+                        os.path.join(ROOT, "runs", "yolo11s_v10", "weights", "epoch80.pt"),
+                        *(os.path.join(ROOT, "runs", r, "weights", "best.pt")
+                          for r in ("yolo11s_v10", "yolo11s_ing", "yolo11s_v3",
+                                    "yolo11s_v2", "yolo11s")))
                     if os.path.exists(p)), "")
     ap.add_argument("--weights", default=default)
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))

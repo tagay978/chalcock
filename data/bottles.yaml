@@ -71,3 +71,62 @@ bottles:
   cremedementhe:            {label: "Crème de Menthe",            ingredient: creme_de_menthe_green}
   apricot:                  {label: "Apricot Brandy",             ingredient: apricot_brandy}
   peychauds_bitters:        {label: "Peychaud's Bitters",         ingredient: peychauds_bitters}
+
+# The yolo11s_v10 detector (dataset_v2, 112 brand classes). class_ingredients.yaml gets most
+# of these right already; these are the ones it left as a raw lowercase slug and/or the
+# generic `liqueur` bucket, plus grandmarnier, whose written-together spelling misses the
+# "grand marnier" pattern in ingredient_rules.yaml (unlike bottles.yaml's own "grandmanier").
+  agwa:                     {label: "Agwa de Bolivia",            ingredient: coca_leaf_liqueur}
+  amaretto:                 {label: "Amaretto",                   ingredient: amaretto}
+  absinthe:                 {label: "Absinthe",                  ingredient: absinthe}
+  absolutecitron:           {label: "Absolut Citron",            ingredient: citron_vodka}
+  absolutevanilla:          {label: "Absolut Vanilla",           ingredient: vanilla_vodka}
+  absolutevodka:            {label: "Absolut Vodka",             ingredient: vodka}
+  amsterdam:                {label: "Amsterdam Vodka",            ingredient: vodka}
+  aperol:                   {label: "Aperol",                     ingredient: aperol}
+  bacardi_gold:             {label: "Bacardi Gold",               ingredient: gold_rum}
+  bacardi_white:            {label: "Bacardi White",              ingredient: white_rum}
+  bacardiblack:             {label: "Bacardi Black",              ingredient: dark_rum}
+  ballantine12:             {label: "Ballantine's 12",            ingredient: scotch}
+  ballantinefinest:         {label: "Ballantine's Finest",        ingredient: scotch}
+  ballantinemasters:        {label: "Ballantine's Masters",       ingredient: scotch}
+  becherovka:               {label: "Becherovka",                 ingredient: becherovka}
+  beefeater:                {label: "Beefeater",                  ingredient: gin}
+  bellswhiskey:             {label: "Bell's Whisky",              ingredient: scotch}
+  benchmark:                {label: "Benchmark Bourbon",          ingredient: bourbon}
+  benedictine:              {label: "Bénédictine",                ingredient: benedictine}
+  blackbottle:              {label: "Black Bottle",               ingredient: scotch}
+  bluecuracao:              {label: "Blue Curaçao",               ingredient: curacao}
+  cachaca51:                {label: "Cachaça 51",                 ingredient: cachaca}
+  campari:                  {label: "Campari",                    ingredient: campari}
+  captainmorgandark:        {label: "Captain Morgan Dark",        ingredient: dark_rum}
+  captainmorganwhiterum:    {label: "Captain Morgan White Rum",   ingredient: white_rum}
+  creamdebanana:            {label: "Crème de Banane",            ingredient: creme_de_banane}
+  fernetbranca:             {label: "Fernet-Branca",              ingredient: fernet}
+  fireball:                 {label: "Fireball Cinnamon Whisky",   ingredient: cinnamon_whisky}
+  galliano:                 {label: "Galliano",                   ingredient: galliano}
+  gilbeysgin:               {label: "Gilbey's Gin",               ingredient: gin}
+  grandmarnier:             {label: "Grand Marnier",              ingredient: grand_marnier}
+  havanaclubanejo7anos:     {label: "Havana Club Añejo 7 Años",   ingredient: dark_rum}
+  havanaclubanejoblanco:    {label: "Havana Club Añejo Blanco",   ingredient: white_rum}
+  havanaclubanejoespecial:  {label: "Havana Club Añejo Especial", ingredient: gold_rum}
+  havanaclubañejo3años: {label: "Havana Club Añejo 3 Años", ingredient: white_rum}
+  hpnotiq:                  {label: "Hpnotiq",                    ingredient: fruit_liqueur}
+  jackdaniel:               {label: "Jack Daniel's",              ingredient: bourbon}
+  kwaifeh:                  {label: "Kwai Feh Lychee Liqueur",    ingredient: lychee_liqueur}
+  montealban:               {label: "Monte Albán Mezcal",         ingredient: mezcal}
+  negritarum:               {label: "Negrita Rum",                ingredient: dark_rum}
+  pama:                     {label: "Pama Pomegranate Liqueur",   ingredient: pomegranate_liqueur}
+  plantation3stars:         {label: "Plantation 3 Stars",         ingredient: white_rum}
+  pucker:                   {label: "Sour Apple Pucker",          ingredient: apple_liqueur}
+  sambuca:                  {label: "Sambuca",                    ingredient: sambuca}
+  southercomfort:           {label: "Southern Comfort",           ingredient: southern_comfort}
+  stgermain:                {label: "St-Germain Elderflower Liqueur", ingredient: elderflower_liqueur}
+  tanqueray:                {label: "Tanqueray",                  ingredient: gin}
+  tina:                     {label: "Tina",                       ingredient: liqueur}
+  wildturkey:               {label: "Wild Turkey",                ingredient: rye}
+  wildturkey_101:           {label: "Wild Turkey 101",            ingredient: bourbon}
+  wildturkey_81proof:       {label: "Wild Turkey 81 Proof",       ingredient: bourbon}
+  wildturkey_8y:            {label: "Wild Turkey 8 Year",         ingredient: bourbon}
+  wildturkey_bourbon:       {label: "Wild Turkey Bourbon",        ingredient: bourbon}
+  xrated:                   {label: "X-Rated Fusion Liqueur",     ingredient: fruit_liqueur}
