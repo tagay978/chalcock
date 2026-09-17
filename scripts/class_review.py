@@ -224,14 +224,18 @@ class Review:
                         counts[names[r[0]]] = counts.get(names[r[0]], 0) + 1
 
         ordered = sorted(counts, key=lambda n: -counts[n])
-        self.class_box["values"] = [f"{n}  ({counts[n]})" for n in ordered]
+        total = sum(counts.values())
+        self.class_box["values"] = ([f"{ALL}  ({total})"] if ordered else [])             + [f"{n}  ({counts[n]})" for n in ordered]
         self.to_box["values"] = names
         self.class_names = ordered
         wanted = self.want_class
         self.want_class = None
-        pick = wanted if wanted in ordered else (ordered[0] if ordered else "")
-        if pick:
-            self.class_var.set(f"{pick}  ({counts[pick]})")
+        if wanted == ALL or (wanted is None and ordered):
+            self.class_var.set(f"{ALL}  ({total})")
+        elif wanted in ordered:
+            self.class_var.set(f"{wanted}  ({counts[wanted]})")
+        elif ordered:
+            self.class_var.set(f"{ordered[0]}  ({counts[ordered[0]]})")
         self.load_items()
 
     def selected_class(self):
@@ -241,10 +245,16 @@ class Review:
         names = self.names()
         want = self.selected_class()
         self.items = []
-        for fn, rows in self.labels.items():
-            for i, r in enumerate(rows):
-                if 0 <= r[0] < len(names) and names[r[0]] == want:
+        for fn in sorted(self.labels):
+            for i, r in enumerate(self.labels[fn]):
+                if not (0 <= r[0] < len(names)):
+                    continue
+                if want == ALL or names[r[0]] == want:
                     self.items.append((fn, i))
+        if want == ALL:
+            # Grouped by class, so a wrong one stands out against its neighbours instead of
+            # being buried among photos that happen to sort next to it.
+            self.items.sort(key=lambda t: (names[self.labels[t[0]][t[1]][0]], t[0]))
         self.page = 0
         self.picked.clear()
         self.render()
@@ -446,7 +456,12 @@ class Review:
             self.photos.append(photo)
             lbl = tk.Label(frame, image=photo, bg=PANEL)
             lbl.pack()
-            cap = tk.Label(frame, text=fn[:18], bg=PANEL, fg=MUTED, font=("Consolas", 7))
+            caption = fn[:18]
+            if self.selected_class() == ALL:
+                names = self.names()
+                cid = box[0]
+                caption = names[cid] if 0 <= cid < len(names) else str(cid)
+            cap = tk.Label(frame, text=caption, bg=PANEL, fg=MUTED, font=("Consolas", 7))
             cap.pack()
             for widget in (frame, lbl, cap):
                 widget.bind("<Button-1>", lambda e, i=index: self.on_click(i, e))
