@@ -42,3 +42,7 @@ dataset_fam/
 
 # staged from ouo_final by scripts/build_conflict_todo.py; rebuild it instead of tracking it
 dataset_todo/
+
+# Early-stage crawled/candidate images. Scrubbed from git history 2026-09-17 - never track again.
+finalloopy/
+good to test/
