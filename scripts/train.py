@@ -1,14 +1,12 @@
-"""Train a bottle detector on the merged dataset built by scripts/build_dataset.py.
+"""Train a bottle detector on the merged dataset built by scripts/build_dataset_ouo.py.
 
-The dataset is small (~1000 train images over 50 classes), so this leans on COCO-pretrained
-weights and keeps the default mosaic/HSV augmentation, turning mosaic off for the last few
-epochs so the model finishes on undistorted images.
+Leans on COCO-pretrained weights and keeps the default mosaic/HSV augmentation, turning mosaic
+off for the last few epochs so the model finishes on undistorted images.
 
 There is no fixed schedule: --epochs is only a ceiling, and the run ends when the validation
-score stops improving. On the 200-epoch run this replaced, mAP peaked at epoch 73 and the
-remaining 127 epochs produced nothing.
+score stops improving.
 
-Run:  python scripts/train.py --aug strong
+Run:  python scripts/train.py --data dataset_v2/data.yaml --aug strong
       python scripts/train.py --model yolo11m.pt --patience 40
 """
 from __future__ import annotations
@@ -17,7 +15,7 @@ import argparse
 import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA = os.path.join(ROOT, "dataset", "data.yaml")
+DATA = os.path.join(ROOT, "dataset_v2", "data.yaml")
 WEIGHTS = os.path.join(ROOT, "weights")
 
 
@@ -80,8 +78,7 @@ def make_stopper(stop_on, patience, min_epochs, mosaic_tail, ceiling, log=print)
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default=DATA,
-                    help="dataset yaml; use dataset_abstain/data.yaml for the 51-class model")
+    ap.add_argument("--data", default=DATA, help="dataset yaml")
     ap.add_argument("--model", default="yolo11s.pt")
     ap.add_argument("--epochs", type=int, default=400,
                     help="ceiling, not a schedule; early stopping decides when to finish")

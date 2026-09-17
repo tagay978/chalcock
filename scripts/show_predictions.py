@@ -155,10 +155,11 @@ def render(image_path, stem, names, preds, title, width=900):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
+    ap.add_argument("--weights", default=os.path.join(
+        ROOT, "runs", "yolo11s_v10", "weights", "epoch80.pt"))
     ap.add_argument("--compare", help="second model, drawn beside the first")
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
-    ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--conf", type=float, default=0.4)
     ap.add_argument("--direct", action="store_true", help="skip the COCO crop stage")
     ap.add_argument("--limit", type=int, default=6, help="how many photos to render")
     ap.add_argument("--out", default=os.path.join(ROOT, "samples"))

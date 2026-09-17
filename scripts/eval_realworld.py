@@ -241,11 +241,12 @@ def report(label, stats, has_abstain=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default=os.path.join(ROOT, "runs", "yolo11s", "weights", "best.pt"))
+    ap.add_argument("--weights", default=os.path.join(
+        ROOT, "runs", "yolo11s_v10", "weights", "epoch80.pt"))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
-    ap.add_argument("--conf", default="0.25,0.5")
+    ap.add_argument("--conf", default="0.15,0.4")
     ap.add_argument("--paths", default="direct,two-stage")
-    ap.add_argument("--level", default="ingredient", choices=["ingredient", "brand", "both"],
+    ap.add_argument("--level", default="brand", choices=["ingredient", "brand", "both"],
                     help="score by what the bottle pours (what the recommender uses) or by brand")
     args = ap.parse_args()
 

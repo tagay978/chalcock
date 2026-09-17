@@ -4,8 +4,8 @@
 Validation mAP already says which epoch was best on data drawn from the training sessions; this
 says which one is best on real photos, which is a different question and the one that matters.
 
-Run:  python scripts/eval_checkpoints.py --run yolo11s_fam
-      python scripts/eval_checkpoints.py --run yolo11s_fam --conf 0.3,0.4,0.5
+Run:  python scripts/eval_checkpoints.py --run yolo11s_v10
+      python scripts/eval_checkpoints.py --run yolo11s_v10 --conf 0.15,0.25,0.4
 """
 from __future__ import annotations
 
