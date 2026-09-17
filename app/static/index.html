@@ -3,233 +3,282 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shelf to Cocktail</title>
+<title>찰칵 Chalcock</title>
 <style>
   :root {
-    --bg: #0d0f14;
-    --panel: #161a22;
-    --panel-2: #1d222c;
-    --line: #272d3a;
-    --text: #e8eaf0;
-    --muted: #8d95a8;
+    --bg: #0a0b10;
+    --panel: #151922;
+    --panel-2: #1b202b;
+    --line: #262c3a;
+    --line-soft: #1e232e;
+    --text: #eceef4;
+    --muted: #8991a6;
+    --muted-2: #626a80;
     --accent: #f0a04b;
+    --accent-2: #f7c68b;
     --accent-dim: #8a5d29;
-    --green: #22c55e;
-    --radius: 14px;
+    --accent-wash: rgba(240,160,75,.09);
+    --violet: #7c6bf0;
+    --green: #34d17c;
+    --red: #ef8a8a;
+    --radius: 16px;
+    --shadow: 0 10px 30px -12px rgba(0,0,0,.55);
   }
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
-    line-height: 1.6;
+    line-height: 1.6; -webkit-font-smoothing: antialiased;
+    position: relative;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 20px 90px; position: relative; z-index: 1; }
+  a { color: inherit; text-decoration: none; }
 
-  header { padding: 52px 0 30px; border-bottom: 1px solid var(--line); margin-bottom: 30px; }
-  h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.4px; }
-  h1 span { color: var(--accent); }
-  .sub { color: var(--muted); margin: 0; font-size: 15px; }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-  .chip {
-    font-size: 12px; padding: 4px 10px; border-radius: 999px;
-    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+  /* ---- decorative backdrop: fixed, behind everything, never intercepts clicks ---- */
+  .backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .backdrop .glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .28; }
+  .backdrop .glow.amber { width: 620px; height: 620px; background: #f0a04b; top: -220px; left: -120px;
+                           animation: drift1 22s ease-in-out infinite alternate; }
+  .backdrop .glow.violet { width: 520px; height: 520px; background: #6a5bd8; top: 30%; right: -180px;
+                            opacity: .22; animation: drift2 26s ease-in-out infinite alternate; }
+  .backdrop .glow.teal { width: 460px; height: 460px; background: #2bb8a3; bottom: -220px; left: 18%;
+                          opacity: .16; animation: drift1 30s ease-in-out infinite alternate-reverse; }
+  .backdrop .grain {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 26px 26px; opacity: .5;
   }
+  .backdrop .vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(900px 600px at 50% 0%, transparent 0%, var(--bg) 92%);
+  }
+  @keyframes drift1 { from { transform: translate(0,0); } to { transform: translate(40px,50px); } }
+  @keyframes drift2 { from { transform: translate(0,0); } to { transform: translate(-50px,30px); } }
 
+  /* top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 40; backdrop-filter: blur(10px);
+    background: rgba(10,11,16,.7); border-bottom: 1px solid var(--line-soft);
+  }
+  .topbar-inner {
+    max-width: 1100px; margin: 0 auto; padding: 14px 20px; display: flex;
+    align-items: center; gap: 10px;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 16px;
+           letter-spacing: -.2px; }
+  .brand .glass { font-size: 19px; }
+  .brand b { color: var(--accent); font-weight: 800; }
+  .brand small { color: var(--muted); font-weight: 500; margin-left: 2px; }
+
+  /* ---- hero (home / upload page) ---- */
+  .hero { padding: 64px 0 8px; text-align: center; position: relative; }
+  .hero-glass {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    width: 260px; height: 260px; opacity: .1; z-index: -1;
+  }
+  .hero-mark { font-size: 42px; margin-bottom: 6px; }
+  h1 { margin: 0 0 10px; font-size: 34px; letter-spacing: -0.6px; }
+  h1 b { color: var(--accent); font-weight: 800; }
+  .sub { color: var(--muted); margin: 0 auto; font-size: 15px; max-width: 480px; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 24px; box-shadow: var(--shadow);
+  }
+  .panel + .panel { margin-top: 22px; }
+  .panel h2 { margin: 0 0 16px; font-size: 13px; text-transform: uppercase;
+              letter-spacing: 1.2px; color: var(--muted); font-weight: 700; }
+
+  .upload-panel { max-width: 620px; margin: 36px auto 0; }
+
+  #drop {
+    border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 52px 20px;
+    text-align: center; cursor: pointer; transition: border-color .18s, background .18s, transform .12s;
+  }
+  #drop:hover { border-color: var(--accent-dim); background: var(--accent-wash); }
+  #drop.over { border-color: var(--accent); background: var(--accent-wash); transform: scale(.995); }
+  #drop .icon { font-size: 34px; margin-bottom: 10px; opacity: .9; }
+  #drop strong { font-size: 17px; display: block; }
+  #drop p { margin: 7px 0 0; color: var(--muted); font-size: 13.5px; }
+
+  .samples-label { font-size: 12px; color: var(--muted-2); margin: 20px 0 8px; text-align: center; }
+  .samples { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .samples img {
+    width: 58px; height: 58px; object-fit: cover; border-radius: 9px; cursor: pointer;
+    border: 2px solid transparent; transition: border-color .15s, transform .15s; opacity: .92;
+  }
+  .samples img:hover { border-color: var(--accent); transform: translateY(-2px); opacity: 1; }
+
+  .spin { display: none; color: var(--accent); font-size: 13.5px; margin-top: 18px;
+          align-items: center; justify-content: center; gap: 8px; }
+  .spin.on { display: flex; }
+  .spin .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+               animation: pulse 1s infinite ease-in-out; }
+  .spin .dot:nth-child(2) { animation-delay: .15s; }
+  .spin .dot:nth-child(3) { animation-delay: .3s; }
+  @keyframes pulse { 0%,80%,100% { opacity: .25; } 40% { opacity: 1; } }
+
+  /* ---- results page ---- */
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
-  .panel h2 { margin: 0 0 14px; font-size: 14px; text-transform: uppercase;
-              letter-spacing: 1px; color: var(--muted); font-weight: 600; }
-
-  #drop {
-    border: 2px dashed var(--line); border-radius: var(--radius); padding: 36px 20px;
-    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
-  }
-  #drop:hover, #drop.over { border-color: var(--accent); background: rgba(240,160,75,.06); }
-  #drop p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
-  #drop strong { font-size: 16px; }
-
-  .samples { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-  .samples img {
-    width: 64px; height: 64px; object-fit: cover; border-radius: 8px; cursor: pointer;
-    border: 2px solid transparent; transition: border-color .15s;
-  }
-  .samples img:hover { border-color: var(--accent); }
-
-  .controls { display: flex; gap: 18px; align-items: center; margin-top: 16px; flex-wrap: wrap;
-              font-size: 13px; color: var(--muted); }
-  .controls input[type=range] { accent-color: var(--accent); }
-  .controls label { display: flex; gap: 7px; align-items: center; }
-  .controls select {
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 13px; max-width: 260px;
-  }
-  .controls select:focus { outline: 1px solid var(--accent); }
-
   #shot { width: 100%; border-radius: 10px; display: block; }
-  .stats { display: flex; gap: 20px; margin-top: 14px; flex-wrap: wrap; }
-  .stat b { display: block; font-size: 22px; color: var(--accent); line-height: 1.2; }
-  .stat span { font-size: 12px; color: var(--muted); }
+  .stats { display: flex; gap: 22px; margin-top: 16px; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 23px; color: var(--accent); line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
 
-  .bottle { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
-            border-bottom: 1px solid var(--line); font-size: 14px; }
-  .bottle:last-child { border-bottom: 0; }
-  .bottle em { color: var(--muted); font-style: normal; font-size: 12px; }
-  .conf { color: var(--green); font-variant-numeric: tabular-nums; font-size: 13px; }
-
-  .cocktail {
-    display: flex; gap: 12px; align-items: center; width: 100%; text-align: left;
-    border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px;
-    margin-bottom: 9px; background: var(--panel-2); color: inherit;
-    font: inherit; cursor: pointer; transition: border-color .15s, background .15s;
+  .rows { display: flex; flex-direction: column; gap: 9px; }
+  .row-card {
+    display: flex; gap: 13px; align-items: center; width: 100%; text-align: left;
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+    background: var(--panel-2); color: inherit; font: inherit; cursor: pointer;
+    transition: border-color .15s, background .15s, transform .12s;
   }
-  .cocktail:hover { border-color: var(--accent); background: #212734; }
-  .cocktail .thumb {
-    width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: 0 0 auto;
-    background: var(--panel);
+  .row-card:hover { border-color: var(--accent-dim); background: #212734; transform: translateY(-1px); }
+  .row-card .thumb {
+    width: 48px; height: 48px; border-radius: 9px; object-fit: cover; flex: 0 0 auto;
+    background: var(--panel); border: 1px solid var(--line-soft);
   }
-  .cocktail .thumb.ph {
-    display: grid; place-items: center; color: var(--accent-dim); font-size: 19px;
+  .row-card .thumb.ph {
+    display: grid; place-items: center; color: var(--accent-dim); font-size: 20px;
   }
-  .cocktail .body { flex: 1 1 auto; min-width: 0; }
-  .cocktail .nm { font-size: 15px; font-weight: 600; }
-  .cocktail .ing { font-size: 12px; color: var(--muted); overflow: hidden;
+  .row-card .body { flex: 1 1 auto; min-width: 0; }
+  .row-card .nm { font-size: 14.5px; font-weight: 600; }
+  .row-card .ing { font-size: 12px; color: var(--muted); overflow: hidden;
                    text-overflow: ellipsis; white-space: nowrap; }
-  .cocktail .go { color: var(--muted); font-size: 18px; flex: 0 0 auto; }
+  .row-card .go { color: var(--muted-2); font-size: 17px; flex: 0 0 auto; }
+  .row-card .conf { color: var(--green); font-variant-numeric: tabular-nums; font-size: 12.5px; flex: 0 0 auto; }
   .cat { font-size: 11px; color: var(--accent-dim); text-transform: uppercase; letter-spacing: .6px; }
-  .miss { font-size: 12px; color: #ef8a8a; }
+  .miss { font-size: 12px; color: var(--red); }
   .sub-note { font-size: 12px; color: var(--accent-dim); }
 
-  /* detail modal */
-  #modal {
-    position: fixed; inset: 0; background: rgba(5,6,9,.78); display: none;
-    align-items: center; justify-content: center; padding: 24px; z-index: 50;
-  }
-  #modal.on { display: flex; }
-  .sheet {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
-    max-width: 780px; width: 100%; max-height: 88vh; overflow: auto;
-    display: grid; grid-template-columns: 300px 1fr;
-  }
-  @media (max-width: 720px) { .sheet { grid-template-columns: 1fr; } }
-  .sheet img.hero { width: 100%; height: 100%; min-height: 260px; object-fit: cover;
-                    border-radius: 16px 0 0 16px; display: block; }
-  @media (max-width: 720px) { .sheet img.hero { border-radius: 16px 16px 0 0; max-height: 240px; } }
-  .sheet .noimg { display: grid; place-items: center; background: var(--panel-2);
-                  color: var(--accent-dim); font-size: 52px; border-radius: 16px 0 0 16px; }
-  .sheet .detail { padding: 24px 26px 26px; }
-  .sheet h3 { margin: 6px 0 2px; font-size: 25px; }
-  .sheet h4 { margin: 20px 0 7px; font-size: 12px; text-transform: uppercase;
-              letter-spacing: 1px; color: var(--muted); }
-  .sheet ul { margin: 0; padding-left: 18px; font-size: 14.5px; }
-  .sheet ul li { margin-bottom: 3px; }
-  .sheet p { margin: 0; font-size: 14px; color: #c7ccd8; }
-  .credit { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line);
-            font-size: 11.5px; color: var(--muted); }
-  .credit a { color: var(--muted); }
-  .close { position: absolute; top: 18px; right: 22px; background: none; border: 0;
-           color: var(--muted); font-size: 30px; cursor: pointer; line-height: 1; }
-  .close:hover { color: var(--text); }
-
   .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
-  .spin { display: none; color: var(--accent); font-size: 14px; }
-  .spin.on { display: block; }
 
-  footer { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--line);
-           color: var(--muted); font-size: 13px; }
-  footer b { color: var(--text); }
-  footer table { border-collapse: collapse; margin-top: 12px; font-size: 12.5px; }
-  footer td, footer th { padding: 4px 14px 4px 0; text-align: left; }
-  footer th { color: var(--text); font-weight: 600; }
+  /* ---- detail pages (bottle / cocktail) ---- */
+  .view { animation: rise .22s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .back {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px;
+    margin: 22px 0 18px; cursor: pointer; transition: color .15s;
+  }
+  .back:hover { color: var(--text); }
+
+  .detail-sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+    overflow: hidden; box-shadow: var(--shadow);
+    display: grid; grid-template-columns: 320px 1fr; align-items: start;
+  }
+  @media (max-width: 720px) { .detail-sheet { grid-template-columns: 1fr; } }
+
+  .detail-media {
+    background: linear-gradient(160deg, #1c212c, #12151d);
+    display: grid; place-items: center; min-height: 300px; padding: 22px;
+    position: sticky; top: 76px; align-self: start;
+  }
+  @media (max-width: 720px) { .detail-media { position: static; } }
+  .detail-media img { max-width: 100%; max-height: 420px; object-fit: contain;
+                       border-radius: 10px; }
+  .detail-media.cover { padding: 0; }
+  .detail-media.cover img { width: 100%; height: 100%; max-height: none; object-fit: cover;
+                            border-radius: 0; min-height: 300px; }
+  .detail-media .noimg { font-size: 56px; color: var(--accent-dim); }
+
+  .detail-body { padding: 30px 32px 32px; }
+  .detail-body h1 { margin: 6px 0 4px; font-size: 27px; text-align: left; }
+  .detail-body h3 { margin: 22px 0 8px; font-size: 12px; text-transform: uppercase;
+              letter-spacing: 1px; color: var(--muted); }
+  .detail-body p.lead { margin: 0; font-size: 14.5px; color: #cbd0dc; }
+  .detail-body ul.ing-list { list-style: none; margin: 0; padding: 0; display: flex;
+                             flex-direction: column; gap: 6px; }
+  .detail-body ul.ing-list li { font-size: 14.5px; }
+  .ing-list a.ing-link {
+    color: var(--accent-2); border-bottom: 1px dotted var(--accent-dim); cursor: pointer;
+  }
+  .ing-list a.ing-link:hover { color: var(--accent); }
+  .detail-body p.method { margin: 0; font-size: 14.5px; color: #c7ccd8; }
+  .credit { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+            font-size: 11.5px; color: var(--muted); }
+  .credit a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+  .credit a:hover { color: var(--text); }
+
+  .also-note { font-size: 12px; color: var(--muted-2); margin: 4px 0 12px; }
+
+  .skeleton { color: var(--muted); font-size: 14px; padding: 40px 0; text-align: center; }
 </style>
 </head>
 <body>
+
+<div class="backdrop">
+  <div class="glow amber"></div>
+  <div class="glow violet"></div>
+  <div class="glow teal"></div>
+  <div class="grain"></div>
+  <div class="vignette"></div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/"><span class="glass">📸</span> 찰칵 <b>Chalcock</b></a>
+  </div>
+</div>
+
 <div class="wrap">
 
-<header>
-  <h1>술장 사진으로 <span>만들 수 있는 칵테일</span> 찾기</h1>
-  <p class="sub">사진 속 병을 검출해 브랜드를 식별하고, 보유 재료로 만들 수 있는 IBA 공식 칵테일을 추천합니다.</p>
-  <div class="chips">
-    <span class="chip" id="chip-brands">YOLO11</span>
-    <span class="chip" id="chip-stage">2-stage detection (COCO crop)</span>
-    <span class="chip" id="chip-recipes">IBA 102 cocktails</span>
-    <span class="chip" id="chip-abstain">—</span>
-  </div>
-</header>
+<!-- ============================= HOME / UPLOAD ============================= -->
+<section id="view-home">
+  <header class="hero">
+    <svg class="hero-glass" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M15 12h70l-30 38v30h14v8H31v-8h14V50L15 12z" stroke="#f0a04b" stroke-width="2.2" stroke-linejoin="round"/>
+    </svg>
+    <div class="hero-mark">📸🍸</div>
+    <h1>찰칵 찍으면, <b>칵테일</b>이 보여요</h1>
+    <p class="sub">술장 사진 한 장이면 어떤 술이 있는지, 그걸로 뭘 만들 수 있는지 바로 알려드려요.</p>
+  </header>
 
-<div class="grid">
-  <div>
+  <div class="upload-panel">
     <div class="panel">
-      <h2>사진 업로드</h2>
       <div id="drop">
+        <div class="icon">📷</div>
         <strong>사진을 끌어다 놓거나 클릭</strong>
         <p>술장·바 선반 사진 (JPG / PNG)</p>
       </div>
       <input type="file" id="file" accept="image/*" hidden>
 
+      <div class="samples-label">또는 테스트 사진으로 바로 시험해보기</div>
       <div class="samples" id="samples"></div>
 
-      <div class="controls">
-        <label>모델 <select id="model"></select></label>
-      </div>
-      <div class="controls">
-        <label>신뢰도 <input type="range" id="conf" min="0.01" max="0.8" step="0.01" value="0.25">
-          <b id="confval">0.25</b></label>
-        <label><input type="checkbox" id="loose"> 유사 재료 대체 허용</label>
-        <label><input type="checkbox" id="twostage" checked> 2단계 검출 (COCO 크롭)</label>
-      </div>
-      <div class="spin" id="spin">분석 중…</div>
-    </div>
-
-    <div class="panel" id="shotpanel" style="margin-top:22px; display:none">
-      <h2>검출 결과</h2>
-      <img id="shot" alt="검출 결과">
-      <div class="stats" id="stats"></div>
-    </div>
-
-    <div class="panel" id="bottlepanel" style="margin-top:22px; display:none">
-      <h2>식별된 병</h2>
-      <div id="bottles"></div>
+      <div class="spin" id="spin"><span class="dot"></span><span class="dot"></span><span class="dot"></span> 찰칵! 분석 중…</div>
     </div>
   </div>
+</section>
 
-  <div>
-    <div class="panel">
-      <h2>지금 만들 수 있는 칵테일</h2>
-      <div id="makeable"><p class="empty">사진을 올리면 결과가 표시됩니다.</p></div>
-    </div>
-    <div class="panel" id="nearlypanel" style="margin-top:22px; display:none">
-      <h2>한두 병만 더 있으면</h2>
-      <div id="nearly"></div>
-    </div>
-  </div>
-</div>
+<!-- ============================= RESULTS ============================= -->
+<section id="view-results" class="view" style="display:none">
+  <a class="back" href="#/">‹ 새 사진 올리기</a>
+  <div id="results-content"></div>
+</section>
 
-<footer>
-  <b>이 데모의 실제 성능</b> — 손으로 라벨링한 실사 테스트셋(사진 27장) 기준, 2단계 검출, 재료 수준 채점.
-  학습셋 검증 점수는 같은 촬영 세션에서 나온 값이라 실사용 성능이 아닙니다.
-  <table>
-    <tr><th>모델</th><th>클래스</th><th>conf</th><th>이름 정답</th><th>이름 정확도</th><th>오경보</th></tr>
-    <tr><td>브랜드 v1</td><td>50</td><td>0.02</td><td>10 / 26</td><td>71.4%</td><td>22.7%</td></tr>
-    <tr><td>브랜드 v3</td><td>113</td><td>0.03</td><td>6 / 32</td><td>33.3%</td><td>26.9%</td></tr>
-    <tr><td><b>재료 (현재)</b></td><td>52</td><td>0.4</td><td><b>12 / 28</b></td><td><b>85.7%</b></td><td><b>12.3%</b></td></tr>
-  </table>
-  <p>재료 모델은 브랜드 대신 "이 병이 무엇을 따르는가"를 학습합니다. Ballantine's 12/Finest/Masters는
-  라벨 띠만 다르고 셋 다 scotch라, 구분을 포기하는 대신 클래스당 데이터가 67개에서 245개로 늘어납니다.
-  추천기가 쓰는 단위도 원래 재료라 정보 손실이 없습니다.</p>
-  <p>브랜드 모델은 임계값을 올리면 정답이 같이 사라졌지만, 재료 모델은 conf 0.3~0.4에서 정답 12개를
-  유지하며 오경보만 20%→12%로 떨어집니다. conf 0.7에서는 이름 정확도 100%입니다.</p>
-  <p>다만 어휘 내 병이 28개뿐입니다. 나머지 227개 박스는 아직 <code>unknown_bottle</code>이라 맞혀도
-  정답으로 집계되지 않습니다.</p>
-</footer>
+<!-- ============================= BOTTLE DETAIL ============================= -->
+<section id="view-bottle" class="view" style="display:none">
+  <a class="back" href="#/">‹ 처음으로</a>
+  <div id="bottle-content"><div class="skeleton">불러오는 중…</div></div>
+</section>
+
+<!-- ============================= COCKTAIL DETAIL ============================= -->
+<section id="view-cocktail" class="view" style="display:none">
+  <a class="back" href="#/">‹ 처음으로</a>
+  <div id="cocktail-content"><div class="skeleton">불러오는 중…</div></div>
+</section>
 
 </div>
-
-<div id="modal"></div>
 
 <script>
 const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, ch =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/* ---------------------------------------------------------------- upload ---- */
 const drop = $('#drop'), fileInput = $('#file');
 
 drop.addEventListener('click', () => fileInput.click());
@@ -240,60 +289,6 @@ drop.addEventListener('drop', e => {
   if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]);
 });
 fileInput.addEventListener('change', () => { if (fileInput.files[0]) send(fileInput.files[0]); });
-$('#conf').addEventListener('input', e => $('#confval').textContent = e.target.value);
-
-let lastFile = null;
-// After switching checkpoints, let the server apply that model's own threshold rather than
-// carrying over the previous one, which can be far too high or low for a different class count.
-let useServerConf = false;
-$('#conf').addEventListener('change', () => { useServerConf = false; lastFile && send(lastFile); });
-$('#loose').addEventListener('change', () => lastFile && send(lastFile));
-$('#model').addEventListener('change', async e => {
-  const opt = e.target.selectedOptions[0];
-  if (opt && opt.dataset.conf) {
-    $('#conf').value = opt.dataset.conf;
-    $('#confval').textContent = opt.dataset.conf;
-  } else {
-    useServerConf = true;     // unseen checkpoint: ask the server what it wants
-  }
-  if (lastFile) await send(lastFile);
-});
-
-$('#twostage').addEventListener('change', e => {
-  $('#chip-stage').textContent = e.target.checked
-    ? '2-stage detection (COCO crop)' : '1-stage detection';
-  if (lastFile) send(lastFile);
-});
-
-fetch('/api/info').then(r => r.json()).then(d => {
-  $('#chip-recipes').textContent = `IBA ${d.recipes} cocktails`;
-  $('#chip-brands').textContent = `YOLO11 · ${d.classes} ${d.level} classes`;
-  $('#chip-abstain').textContent = d.abstains
-    ? '기권 가능 (unknown_bottle)' : `${d.bottles}종 재료 매핑`;
-  // A 119-class model is confident at 0.05 where a 50-class one wants 0.25; start where the
-  // loaded model actually works rather than at a number that returns nothing.
-  $('#conf').value = d.default_conf;
-  $('#confval').textContent = d.default_conf;
-});
-
-fetch('/api/models').then(r => r.json()).then(d => {
-  const sel = $('#model');
-  let run = null, group = null;
-  d.models.forEach(m => {
-    if (m.run !== run) {
-      run = m.run;
-      group = document.createElement('optgroup');
-      group.label = run;
-      sel.appendChild(group);
-    }
-    const o = document.createElement('option');
-    o.value = m.key;
-    o.textContent = m.tag + (m.classes ? `  (${m.classes} classes)` : '');
-    if (m.default_conf) o.dataset.conf = m.default_conf;
-    if (m.key === d.current) o.selected = true;
-    group.appendChild(o);
-  });
-});
 
 fetch('/api/samples').then(r => r.json()).then(list => {
   const box = $('#samples');
@@ -309,30 +304,40 @@ fetch('/api/samples').then(r => r.json()).then(list => {
   });
 });
 
+let lastResult = null;
+
 async function send(file) {
-  lastFile = file;
   $('#spin').classList.add('on');
   const fd = new FormData();
   fd.append('file', file);
-  const q = `?conf=${useServerConf ? 0 : $('#conf').value}&loose=${$('#loose').checked}`
-          + `&two_stage=${$('#twostage').checked}`
-          + `&model=${encodeURIComponent($('#model').value)}`;
   try {
-    const res = await fetch('/api/detect' + q, { method: 'POST', body: fd });
+    const res = await fetch('/api/detect', { method: 'POST', body: fd });
     const d = await res.json();
     if (d.error) { alert(d.error); return; }
-    render(d);
+    lastResult = d;
+    location.hash = '#/results';
   } finally {
     $('#spin').classList.remove('on');
   }
 }
 
-const esc = s => String(s).replace(/[&<>"]/g, ch =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+/* ---------------------------------------------------------------- shared cards ---- */
+function bottleRow(b) {
+  const thumb = b.crop || b.photo
+    ? `<img class="thumb" src="${b.crop || b.photo}" alt="" loading="lazy">`
+    : `<div class="thumb ph">🍾</div>`;
+  return `<a class="row-card" href="#/bottle/${encodeURIComponent(b.cls)}">
+    ${thumb}
+    <div class="body">
+      <div class="nm">${esc(b.label)}</div>
+      <div class="ing">${esc(b.ingredient)}</div>
+    </div>
+    <div class="conf">${b.conf.toFixed(2)}</div>
+    <div class="go">›</div>
+  </a>`;
+}
 
-let shown = [];   // every cocktail currently listed, indexed by the button's data-i
-
-function recipeCard(c, i, missing) {
+function cocktailRow(c, missing) {
   const thumb = c.photo
     ? `<img class="thumb" src="${c.photo.src}" alt="" loading="lazy">`
     : `<div class="thumb ph">🍸</div>`;
@@ -341,7 +346,7 @@ function recipeCard(c, i, missing) {
     : (c.subs && c.subs.length
         ? `<div class="sub-note">대체: ${esc(c.subs.join(', '))}</div>` : '');
   const summary = note || `<div class="ing">${esc(c.ingredients.slice(0, 3).join(' · '))}</div>`;
-  return `<button class="cocktail" data-i="${i}">
+  return `<a class="row-card" href="#/cocktail/${encodeURIComponent(c.slug)}">
     ${thumb}
     <div class="body">
       <div class="cat">${esc(c.category)}</div>
@@ -349,86 +354,176 @@ function recipeCard(c, i, missing) {
       ${summary}
     </div>
     <div class="go">›</div>
-  </button>`;
+  </a>`;
 }
 
-function openDetail(c) {
-  const hero = c.photo
-    ? `<img class="hero" src="${c.photo.src}" alt="${esc(c.name)}">`
-    : `<div class="noimg">🍸</div>`;
-  const credit = c.photo
-    ? `<div class="credit">사진: ${esc(c.photo.creator)} ·
-        <a href="${c.photo.landing_url}" target="_blank" rel="noopener">Wikimedia Commons</a> ·
-        <a href="${c.photo.license_url}" target="_blank" rel="noopener">${esc(c.photo.license)}</a>
-        <br>레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a></div>`
-    : `<div class="credit">레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a></div>`;
+/* ---------------------------------------------------------------- results page ---- */
+function showResults() {
+  const box = $('#results-content');
+  const d = lastResult;
+  if (!d) {
+    box.innerHTML = `<p class="empty">아직 분석한 사진이 없습니다. <a href="#/" style="color:var(--accent)">사진을 올려보세요</a>.</p>`;
+    return;
+  }
+  box.innerHTML = `
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <h2>검출 결과</h2>
+          <img id="shot" alt="검출 결과" src="${d.image}">
+          <div class="stats">
+            <div class="stat"><b>${d.bottles_found}</b><span>병 검출</span></div>
+            <div class="stat"><b>${d.named}</b><span>브랜드 식별</span></div>
+            <div class="stat"><b>${d.ingredients.length}</b><span>재료</span></div>
+          </div>
+        </div>
+        ${d.bottles.length ? `
+        <div class="panel">
+          <h2>식별된 병</h2>
+          <div class="rows">${d.bottles.map(bottleRow).join('')}</div>
+        </div>` : ''}
+      </div>
 
-  document.querySelector('#modal').innerHTML = `
-    <div class="sheet" style="position:relative">
-      <button class="close" aria-label="닫기">×</button>
-      ${hero}
-      <div class="detail">
-        <div class="cat">${esc(c.category)}</div>
-        <h3>${esc(c.name)}</h3>
-        ${c.missing ? `<div class="miss">없는 재료: ${esc(c.missing.join(', '))}</div>` : ''}
-        ${c.subs && c.subs.length
-          ? `<div class="sub-note">대체 사용: ${esc(c.subs.join(', '))}</div>` : ''}
-        <h4>재료</h4>
-        <ul>${c.ingredients.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
-        <h4>만드는 방법</h4>
-        <p>${esc(c.method || '—')}</p>
-        ${c.garnish && c.garnish.toUpperCase() !== 'N/A'
-          ? `<h4>가니시</h4><p>${esc(c.garnish)}</p>` : ''}
-        ${credit}
+      <div>
+        <div class="panel">
+          <h2>지금 만들 수 있는 칵테일</h2>
+          <div class="rows">${d.makeable.length
+            ? d.makeable.map(c => cocktailRow(c, false)).join('')
+            : `<p class="empty">${d.bottles.length
+                ? '식별된 재료로 정확히 만들 수 있는 IBA 칵테일이 없습니다. 아래 "한두 병만 더" 목록을 보세요.'
+                : '병을 식별하지 못했습니다. 더 밝고 선명한 사진으로 다시 시도해보세요.'}</p>`}
+          </div>
+        </div>
+        ${d.nearly.length ? `
+        <div class="panel">
+          <h2>한두 병만 더 있으면</h2>
+          <div class="rows">${d.nearly.map(c => cocktailRow(c, true)).join('')}</div>
+        </div>` : ''}
       </div>
     </div>`;
-  document.querySelector('#modal').classList.add('on');
 }
 
-function closeDetail() { document.querySelector('#modal').classList.remove('on'); }
+/* ---------------------------------------------------------------- router ---- */
+function setView(id) {
+  ['view-home', 'view-results', 'view-bottle', 'view-cocktail'].forEach(v =>
+    $('#' + v).style.display = v === id ? '' : 'none');
+  window.scrollTo(0, 0);
+}
 
-document.addEventListener('click', e => {
-  const card = e.target.closest('.cocktail');
-  if (card) { openDetail(shown[+card.dataset.i]); return; }
-  if (e.target.closest('.close') || e.target.id === 'modal') closeDetail();
-});
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
-
-function render(d) {
-  $('#shotpanel').style.display = '';
-  $('#shot').src = d.image;
-  $('#chip-brands').textContent = `YOLO11 · ${d.classes} ${d.level} classes`;
-  const opt = [...$('#model').options].find(o => o.value === d.model);
-  if (opt && d.default_conf) opt.dataset.conf = d.default_conf;
-  if (useServerConf && d.default_conf) {
-    $('#conf').value = d.default_conf;
-    $('#confval').textContent = d.default_conf;
-    useServerConf = false;
+async function route() {
+  const hash = location.hash.replace(/^#/, '') || '/';
+  const bottleMatch = hash.match(/^\/bottle\/(.+)$/);
+  const cocktailMatch = hash.match(/^\/cocktail\/(.+)$/);
+  if (hash === '/results') {
+    setView('view-results');
+    showResults();
+  } else if (bottleMatch) {
+    setView('view-bottle');
+    await showBottle(decodeURIComponent(bottleMatch[1]));
+  } else if (cocktailMatch) {
+    setView('view-cocktail');
+    await showCocktail(decodeURIComponent(cocktailMatch[1]));
+  } else {
+    setView('view-home');
   }
-  $('#stats').innerHTML = `
-    <div class="stat"><b>${d.bottles_found}</b><span>병 검출</span></div>
-    <div class="stat"><b>${d.named}</b><span>브랜드 식별</span></div>
-    <div class="stat"><b>${d.declined}</b><span>${d.abstains ? '기권' : '미식별'}</span></div>
-    <div class="stat"><b>${d.ingredients.length}</b><span>재료</span></div>
-    <div class="stat"><b>${d.two_stage ? '2' : '1'}</b><span>단계 검출</span></div>`;
-
-  $('#bottlepanel').style.display = d.bottles.length ? '' : 'none';
-  $('#bottles').innerHTML = d.bottles.map(b =>
-    `<div class="bottle"><div>${b.label}<br><em>${b.ingredient}</em></div>
-     <div class="conf">${b.conf.toFixed(2)}</div></div>`).join('');
-
-  // One flat index across both lists, so a card can find its recipe by position.
-  shown = [...d.makeable, ...d.nearly];
-  $('#makeable').innerHTML = d.makeable.length
-    ? d.makeable.map((c, i) => recipeCard(c, i, false)).join('')
-    : `<p class="empty">${d.bottles.length
-        ? '식별된 재료로 정확히 만들 수 있는 IBA 칵테일이 없습니다. 아래 "한두 병만 더" 목록을 보세요.'
-        : '병을 식별하지 못했습니다. 신뢰도를 낮춰보세요.'}</p>`;
-
-  $('#nearlypanel').style.display = d.nearly.length ? '' : 'none';
-  $('#nearly').innerHTML = d.nearly
-    .map((c, i) => recipeCard(c, d.makeable.length + i, true)).join('');
 }
+window.addEventListener('hashchange', route);
+
+/* ---------------------------------------------------------------- bottle page ---- */
+async function showBottle(cls) {
+  const box = $('#bottle-content');
+  box.innerHTML = '<div class="skeleton">불러오는 중…</div>';
+  const res = await fetch('/api/bottle/' + encodeURIComponent(cls));
+  const b = await res.json();
+  if (b.error) { box.innerHTML = `<p class="empty">${esc(b.error)}</p>`; return; }
+
+  const media = b.photo
+    ? `<img src="${b.photo}" alt="${esc(b.label)}">`
+    : `<div class="noimg">🍾</div>`;
+  const credit = b.credit
+    ? `<div class="credit">사진: ${esc(b.credit.creator)} ·
+        <a href="${b.credit.landing_url}" target="_blank" rel="noopener">Wikimedia Commons</a> ·
+        <a href="${b.credit.license_url}" target="_blank" rel="noopener">${esc(b.credit.license)}</a></div>`
+    : '';
+
+  const list = items => items.map(c => `
+    <a class="row-card" href="#/cocktail/${encodeURIComponent(c.slug)}">
+      ${c.photo ? `<img class="thumb" src="${c.photo.src}" alt="" loading="lazy">`
+                : `<div class="thumb ph">🍸</div>`}
+      <div class="body">
+        <div class="cat">${esc(c.category)}</div>
+        <div class="nm">${esc(c.name)}</div>
+      </div>
+      <div class="go">›</div>
+    </a>`).join('');
+
+  box.innerHTML = `
+    <div class="detail-sheet">
+      <div class="detail-media">${media}</div>
+      <div class="detail-body">
+        <div class="cat">${esc(b.category)}</div>
+        <h1>${esc(b.label)}</h1>
+        <p class="lead">${esc(b.blurb)}</p>
+        ${credit}
+
+        <h3>이 술로 만들 수 있는 칵테일 ${b.cocktails.length ? `(${b.cocktails.length})` : ''}</h3>
+        ${b.cocktails.length
+          ? `<div class="rows">${list(b.cocktails)}</div>`
+          : `<p class="empty">등록된 IBA 레시피 중 이 재료를 직접 필요로 하는 칵테일이 없습니다.</p>`}
+
+        ${b.cocktails_sub.length ? `
+          <h3 style="margin-top:26px">대체 재료로 가능</h3>
+          <div class="also-note">아래 칵테일은 원래 다른 재료를 쓰지만 ${esc(b.label)}(으)로도 대신할 수 있습니다.</div>
+          <div class="rows">${list(b.cocktails_sub)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- cocktail page ---- */
+async function showCocktail(slug) {
+  const box = $('#cocktail-content');
+  box.innerHTML = '<div class="skeleton">불러오는 중…</div>';
+  const res = await fetch('/api/cocktail/' + encodeURIComponent(slug));
+  const c = await res.json();
+  if (c.error) { box.innerHTML = `<p class="empty">${esc(c.error)}</p>`; return; }
+
+  const media = c.photo
+    ? `<img src="${c.photo.src}" alt="${esc(c.name)}">`
+    : `<div class="noimg">🍸</div>`;
+
+  const ingLines = c.ingredients.map(i => i.key
+    ? `<li><a class="ing-link" href="#/bottle/${encodeURIComponent(i.key)}">${esc(i.text)}</a></li>`
+    : `<li>${esc(i.text)}</li>`).join('');
+
+  const credit = c.photo
+    ? `사진: ${esc(c.photo.creator)} ·
+        <a href="${c.photo.landing_url}" target="_blank" rel="noopener">Wikimedia Commons</a> ·
+        <a href="${c.photo.license_url}" target="_blank" rel="noopener">${esc(c.photo.license)}</a>
+        <br>레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a>`
+    : `레시피: <a href="${c.url}" target="_blank" rel="noopener">IBA 공식</a>`;
+
+  box.innerHTML = `
+    <div class="detail-sheet">
+      <div class="detail-media cover">${media}</div>
+      <div class="detail-body">
+        <div class="cat">${esc(c.category)}</div>
+        <h1>${esc(c.name)}</h1>
+
+        <h3>재료</h3>
+        <ul class="ing-list">${ingLines}</ul>
+
+        <h3>만드는 방법</h3>
+        <p class="method">${esc(c.method || '—')}</p>
+
+        ${c.garnish && c.garnish.toUpperCase() !== 'N/A'
+          ? `<h3>가니시</h3><p class="method">${esc(c.garnish)}</p>` : ''}
+
+        <div class="credit">${credit}</div>
+      </div>
+    </div>`;
+}
+
+route();
 </script>
 </body>
 </html>
