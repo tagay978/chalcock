@@ -1,8 +1,9 @@
 """Render a demo video of the pipeline running on real test photos.
 
 Made for a portfolio: a title card, then one segment per photo showing the bottles being found,
-named or declined, and the cocktails that fall out of the result, then a closing card with the
-measured numbers rather than the flattering ones.
+named or declined, and the cocktails that fall out of the result, then a closing card with what
+this run actually found - not a hand-labelled accuracy number, since the current testset has no
+ground truth to measure against yet.
 
 Everything shown is computed by the same code the CLI and the web app use, so the video cannot
 show a result the system does not actually produce.
@@ -214,35 +215,23 @@ def segment(frames, path, brand, coco, conf, rules, recipes, index, total, two_s
         write(frames, build(k, False), 0.09)
     write(frames, build(len(results), True), 3.2)
     fade(frames, build(len(results), True), 0.3, out=True)
+    return len(named)
 
 
-def pick_photos(n):
-    """Prefer photos that actually contain bottles among the 50.
+def pick_photos(n, brand, coco, conf, two_stage):
+    """Prefer photos the model actually has something to say about.
 
-    Alphabetical order lands on wine-shop shelves where every bottle is out of vocabulary; the
-    model then has nothing to be right about and the demo shows nothing but noise. Ranking by
-    the annotation picks the photos where the system has something to say.
+    testset/labels carries no ground truth for the current photos (they were just swapped in
+    fresh, see git log) - so instead of ranking by annotation, this runs the real detector once
+    per photo and ranks by how many bottles it named. Alphabetical order would just as easily
+    open on a wine-shop shelf with nothing in vocabulary, which makes for a dull demo even
+    though it is an honest result.
     """
-    import yaml
-
     files = sorted(f for f in os.listdir(TESTSET) if f.lower().endswith((".jpg", ".jpeg", ".png")))
-    yaml_path = os.path.join(ROOT, "testset", "data.yaml")
-    labels = os.path.join(ROOT, "testset", "labels")
-    if not (os.path.exists(yaml_path) and os.path.isdir(labels)):
-        return files[:n]
-
-    names = yaml.safe_load(open(yaml_path, encoding="utf-8"))["names"]
-    trained = set(names[:50])
     scored = []
     for fn in files:
-        path = os.path.join(labels, os.path.splitext(fn)[0] + ".txt")
-        known = 0
-        if os.path.exists(path):
-            for line in open(path, encoding="utf-8"):
-                parts = line.split()
-                if len(parts) >= 5 and int(parts[0]) < len(names) and names[int(parts[0])] in trained:
-                    known += 1
-        scored.append((known, fn))
+        _, results = analyse(os.path.join(TESTSET, fn), brand, coco, conf, two_stage)
+        scored.append((sum(1 for _, name, _ in results if name), fn))
     scored.sort(key=lambda x: (-x[0], x[1]))
     return [fn for _, fn in scored[:n]]
 
@@ -262,14 +251,14 @@ def card(frames, lines, seconds=3.0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default=next(
-        (p for p in (os.path.join(ROOT, "runs", r, "weights", "best.pt")
-                     for r in ("yolo11s_ing", "yolo11s_v3", "yolo11s_v2", "yolo11s")) if os.path.exists(p)), ""))
+    ap.add_argument("--weights", default=os.path.join(
+        ROOT, "runs", "yolo11s_v10", "weights", "epoch80.pt"))
     ap.add_argument("--coco-weights", default=os.path.join(ROOT, "weights", "yolo11m.pt"))
-    ap.add_argument("--conf", type=float, default=0.25)
+    ap.add_argument("--conf", type=float, default=0.4)
     ap.add_argument("--n", type=int, default=5, help="how many photos to show")
-    ap.add_argument("--one-stage", dest="two_stage", action="store_false",
-                    help="run the detector straight at the photo instead of cropping first")
+    ap.add_argument("--two-stage", dest="two_stage", action="store_true", default=False,
+                    help="crop each COCO-proposed bottle before naming it, instead of running "
+                         "the brand model on the full photo")
     ap.add_argument("--out", default=os.path.join(ROOT, "samples", "demo.mp4"))
     args = ap.parse_args()
 
@@ -280,7 +269,7 @@ def main():
     recipes = R.json.load(open(os.path.join(ROOT, "data", "iba_cocktails.json"),
                                encoding="utf-8"))["cocktails"]
 
-    picked = pick_photos(args.n)
+    picked = pick_photos(args.n, brand, coco, args.conf, args.two_stage)
     if not picked:
         raise SystemExit(f"no images in {TESTSET}")
 
@@ -290,27 +279,27 @@ def main():
         raise SystemExit(f"could not open {args.out} for writing")
 
     card(frames, [
-        ("술장 사진으로 만들 수 있는 칵테일 찾기", F_TITLE, TEXT),
-        ("YOLO11 bottle detection  ·  IBA 102 cocktails", F_BODY, MUTED),
+        ("찰칵 Chalcock", F_TITLE, ACCENT),
+        ("술장 사진으로 만들 수 있는 칵테일 찾기", F_BODY, TEXT),
+        ("YOLO11 bottle detection  ·  IBA 102 cocktails", F_SMALL, MUTED),
     ], 2.2)
 
+    total_named = 0
     for i, fn in enumerate(picked, 1):
         print(f"  rendering {i}/{len(picked)}: {fn}")
-        segment(frames, os.path.join(TESTSET, fn), brand, coco, args.conf, rules, recipes,
-                i, len(picked), args.two_stage)
+        total_named += segment(frames, os.path.join(TESTSET, fn), brand, coco, args.conf, rules,
+                               recipes, i, len(picked), args.two_stage)
 
-    abstains = R.ABSTAIN in brand.names.values()
+    # No hand-labelled ground truth for the current testset yet (it was just replaced with fresh
+    # shelf photos - see git log), so this closes on what the run actually did, not a number that
+    # would otherwise go stale the moment the model or test photos change.
+    run = os.path.basename(os.path.dirname(os.path.dirname(args.weights)))
+    tag = os.path.splitext(os.path.basename(args.weights))[0]
     card(frames, [
-        ("실사 테스트셋 측정 결과", F_H1, TEXT),
-        ("사진 27장 · 병 255개 · 손으로 라벨링", F_SMALL, MUTED),
+        (f"{run}/{tag}  ·  conf {args.conf}  ·  {'2' if args.two_stage else '1'}단계 검출", F_H1, TEXT),
+        (f"이 {len(picked)}장에서 브랜드 {total_named}개 식별", F_BODY, ACCENT),
         ("", F_SMALL, MUTED),
-        ("병 위치 검출  7 / 26", F_BODY, TEXT),
-        ("재료 정확도(검출된 병)  71.4%", F_BODY, ACCENT),
-        ("어휘 밖 병 비율  90%", F_BODY, TEXT),
-        ("", F_SMALL, MUTED),
-        (f"모델: {os.path.basename(os.path.dirname(os.path.dirname(args.weights)))}"
-         + f"  ·  {'2' if args.two_stage else '1'}단계 검출"
-         + ("  ·  기권 가능" if abstains else ""), F_SMALL, MUTED),
+        ("github.com/tagay978/cocktail-bottle-detector", F_SMALL, MUTED),
     ], 4.0)
 
     frames.release()

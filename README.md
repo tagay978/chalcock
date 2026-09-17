@@ -1,7 +1,12 @@
 # Bottle detection for cocktail recommendation
 
+![Chalcock demo: uploading a shelf photo, detecting bottles, and listing makeable cocktails](docs/demo.gif)
+
 Detects liquor bottles in a photo of a home bar shelf, so the set of detected bottles can be
-matched against a cocktail database to recommend drinks that are actually makeable.
+matched against a cocktail database to recommend drinks that are actually makeable. The web
+demo (`app/`) runs this end to end: upload a photo, get back the bottles it found and the IBA
+cocktails they make. The clip above is `yolo11s_v10/epoch80` at conf 0.4, one-stage, running on
+real (not staged) shelf photos — generate a fresh one with `python scripts/make_demo_video.py`.
 
 This repository holds the detector: the dataset merge and the YOLO training.
 
