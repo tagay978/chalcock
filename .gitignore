@@ -49,3 +49,7 @@ good to test/
 
 # Personal notes, not for the public repo.
 포트폴리오_초안.md
+
+# Claude Code's own local launch config — a hardcoded machine-specific python path,
+# no use to anyone else cloning this. Scrubbed from git history 2026-09-17.
+.claude/
