@@ -193,15 +193,19 @@ def scan_ouo(skipped, level="brand"):
                 ipath = os.path.join(bdir, fn)
                 lpath = os.path.join(bdir, stem + ".txt")
                 if not os.path.exists(lpath):
-                    skipped["image with no label"] += 1
-                    continue
-                rows = read_label(lpath)
+                    # Never annotated. Held back as the test split rather than thrown away -
+                    # an unlabelled photo cannot be scored, but it is still the only pile of
+                    # untouched images to look at a finished model on.
+                    skipped["image with no label -> test"] += 1
+                    rows = []
+                else:
+                    rows = read_label(lpath)
                 if rows is None:
                     skipped["label file is not a label"] += 1
                     continue
                 if not rows:
-                    skipped["empty label"] += 1
-                    continue
+                    skipped["empty label -> test"] += 1
+                    rows = []
                 boxes = []
                 for cid, *xywh in rows:
                     name = names[cid] if 0 <= cid < len(names) else None
@@ -508,7 +512,8 @@ def main():
     stats = Counter()
     unmapped = Counter()
     applied = empty_dropped = 0
-    final = []                       # (group index, representative, boxes)
+    final = []                       # (group index, representative, boxes) - train and valid
+    unlabelled = []                  # (group index, representative) - the test split
     for gi, members in enumerate(groups):
         rep = min(members, key=lambda i: (records[i]["source"] != "ouo", records[i]["path"]))
         r = records[rep]
@@ -527,11 +532,15 @@ def main():
                     unmapped[cname] += 1
             boxes = replaced
             applied += 1
-        # A photo with nothing left to label is a photo the annotator threw out - too blurred,
-        # too dark, nothing identifiable. Keeping it would only teach the model that bottles
-        # are background.
+        # Two ways to end up with no boxes, and they mean opposite things. A photo whose fix
+        # file is empty is one somebody opened and cleared - too blurred, too dark, nothing
+        # identifiable - and keeping it would only teach the model that bottles are background.
+        # A photo nobody ever annotated is just unseen, so it is held back as the test split.
         if not boxes:
-            empty_dropped += 1
+            if fix is not None:
+                empty_dropped += 1
+            else:
+                unlabelled.append((gi, r))
             continue
         final.append((gi, r, boxes))
 
@@ -546,7 +555,8 @@ def main():
               f"labelled the photo most sparingly")
     if stats["dropped"]:
         print(f"  dropped {stats['dropped']} boxes with no sparsest source to believe")
-    print(f"  photos: {len(final)} ({empty_dropped} dropped for having no usable label)")
+    print(f"  photos: {len(final)} labelled for train/valid, {len(unlabelled)} never annotated "
+          f"-> test, {empty_dropped} cleared by hand and dropped")
     print(f"  boxes: {sum(per_class.values())}")
     thin = [f"{c}:{per_class[c]}" for c in names if per_class[c] < 15]
     if thin:
@@ -565,8 +575,7 @@ def main():
     # can hit every target; each photo goes to whichever split is furthest behind on the classes
     # that photo actually contains, weighted so a rare class outvotes a common one. Rarest first,
     # because a class with nine boxes has no slack left once the shelf photos have been placed.
-    target = {"train": 1.0 - args.valid_frac - args.test_frac,
-              "valid": args.valid_frac, "test": args.test_frac}
+    target = {"train": 1.0 - args.valid_frac, "valid": args.valid_frac}
     rng = random.Random(args.seed)
     rng.shuffle(final)
     final.sort(key=lambda t: min(per_class[b[0]] for b in t[2]))
@@ -577,7 +586,7 @@ def main():
     for gi, r, boxes in final:
         want = Counter(b[0] for b in boxes)
         best, best_score = None, None
-        for split in ("train", "valid", "test"):
+        for split in ("train", "valid"):
             if target[split] <= 0:
                 continue
             # How short of its target this split is, over the classes in this photo. Dividing by
@@ -622,6 +631,25 @@ def main():
                          "|".join(sorted({c for c, *_ in boxes})),
                          "|".join(sorted({records[i]["source"] for i in groups[gi]}))))
 
+    # The test split is the untouched pile: images copied over with an empty label file, so
+    # the model can be looked at on photos no annotator ever shaped. Nothing to score against,
+    # which is the point - testset/ is where the numbers come from.
+    for gi, r in unlabelled:
+        name = f"{r['md5'][:12]}_{sanitize(r['stem'])}"
+        ext = ".jpg" if r["ext"] in (".jpg", ".jpeg") else r["ext"]
+        with Image.open(r["path"]) as im:
+            if max(im.size) > args.max_side:
+                im = im.convert("RGB")
+                im.thumbnail((args.max_side, args.max_side))
+                im.save(os.path.join(OUT, "test", "images", name + ext), quality=92)
+                resized[0] += 1
+            else:
+                shutil.copy2(r["path"], os.path.join(OUT, "test", "images", name + ext))
+        open(os.path.join(OUT, "test", "labels", name + ".txt"), "w", encoding="utf-8").close()
+        counts["test"] += 1
+        manifest.append((name + ext, "test", 0, "", 
+                         "|".join(sorted({records[i]["source"] for i in groups[gi]}))))
+
     with open(os.path.join(OUT, "data.yaml"), "w", encoding="utf-8") as fh:
         yaml.safe_dump({"path": OUT.replace("\\", "/"), "train": "train/images",
                         "val": "valid/images", "test": "test/images",
@@ -660,9 +688,11 @@ def main():
 
     # Balance report: the split percentages mean little on their own, since a photo drags all
     # its classes into one split. What matters is that no class is missing from train or valid.
-    total = sum(counts.values())
-    print("  share of photos:", ", ".join(
-        f"{s_} {counts[s_] / total:.0%}" for s_ in ("train", "valid", "test")))
+
+    labelled = counts["train"] + counts["valid"]
+    print(f"  labelled photos: train {counts['train'] / labelled:.0%}, "
+          f"valid {counts['valid'] / labelled:.0%}")
+    print(f"  test split: {counts['test']} unlabelled photos, held back to look at")
     off = []
     for c in names:
         t = box_counts[c]
@@ -670,9 +700,9 @@ def main():
             continue
         v = have[c]["valid"] / t
         if have[c]["train"] == 0 or have[c]["valid"] == 0 or abs(v - args.valid_frac) > 0.2:
-            off.append(f"{c} ({have[c]['train']}/{have[c]['valid']}/{have[c]['test']})")
+            off.append(f"{c} ({have[c]['train']}/{have[c]['valid']})")
     if off:
-        print(f"  {len(off)} classes off target (train/valid/test boxes): "
+        print(f"  {len(off)} classes off target (train/valid boxes): "
               + ", ".join(off[:10]) + (" ..." if len(off) > 10 else ""))
     else:
         print("  every class sits within 20 points of the valid fraction")
