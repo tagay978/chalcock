@@ -1,11 +1,6 @@
-[https://github.com/user-attachments/assets/87880b22-f9a0-47a5-ab97-96a838bdb7b6
 # Chalcock — bottle detection for cocktail recommendation
 
-![Chalcock demo: detecting bottles on two real shelf photos, then clicking through to a bottle's info page and a cocktail's recipe page](docs/demo.gif)
-
-[Full-quality video](https://github.com/tagay978/chalcock/raw/main/docs/demo.mp4) — GitHub won't
-play a self-hosted video inline in a README (only ones uploaded through its own web UI), so the
-gif above is the compressed preview and this is the real thing.
+https://github.com/user-attachments/assets/87880b22-f9a0-47a5-ab97-96a838bdb7b6
 
 Upload a photo of a home bar shelf, get back which bottles it recognises and which of the 102
 official IBA cocktails they can actually make. A YOLO11 detector finds and names the bottles;
