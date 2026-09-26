@@ -1,3 +1,4 @@
+https://github.com/user-attachments/assets/87880b22-f9a0-47a5-ab97-96a838bdb7b6
 # Chalcock — bottle detection for cocktail recommendation
 
 ![Chalcock demo: detecting bottles on two real shelf photos, then clicking through to a bottle's info page and a cocktail's recipe page](docs/demo.gif)
